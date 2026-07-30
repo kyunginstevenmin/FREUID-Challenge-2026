@@ -1,12 +1,14 @@
-# 🏆 FREUID Challenge 2026 — Provisional Rank-1 Solution
+# 🏆 FREUID Challenge 2026 — 1st-Place Solution
 
 **Team:** nadhir hasan (Nadhir Hasan) · **Kaggle username:** nadhirhasan
 
-**Provisional result: currently ranked 1st** (private leaderboard results are
-preliminary and pending organizer verification), private leaderboard score **0.0582**
-(leading submission: `cv5_ep2`, Pick 2). This repository is the full reproducibility package: training code, inference code,
-frozen model weights, and a runnable Docker container the organizers can execute in a
-network-isolated sandbox to reproduce both of our two selected final submissions.
+**Result: 1st place** — private leaderboard score **0.0582** (winning submission:
+`cv5_ep2`, Pick 2), confirmed by the organizers after private-test evaluation and a
+reproducibility review. Sincere thanks to the organizers and to every team that took
+part — it was a strong and welcoming first edition. This repository is the full
+reproducibility package: training code, inference code, frozen model weights, and a
+runnable Docker container the organizers can execute in a network-isolated sandbox to
+reproduce both of our two selected final submissions.
 
 ![Public vs private leaderboard result](report/figures/leaderboard_result.png)
 
@@ -16,8 +18,11 @@ best-public-scoring model (`cv3`) did not — is the central story of this repos
 explained in full in the [technical report](report/freuid_technical_report.pdf) and
 summarized below.
 
+---
+
 ## Contents
 
+- [The approach: forcing the model to generalize](#the-approach-forcing-the-model-to-generalize)
 - [The leading submission — cv5](#the-leading-submission--cv5)
 - [Why cv5 ranks ahead: the two-pick strategy explained](#why-cv5-ranks-ahead-the-two-pick-strategy-explained)
 - [Attack-placement metadata (`annotations/type_fields.json`)](#attack-placement-metadata-annotationstype_fieldsjson)
@@ -32,6 +37,38 @@ summarized below.
 - [Licenses](#licenses)
 
 ---
+
+## The approach: forcing the model to generalize
+
+The whole solution grew out of one observation. We first trained on the **FREUID
+data only**, with a stratified 5-fold cross-validation. In-domain validation looked
+excellent on every fold — but the public leaderboard did **not** track it. The
+reason: the FREUID training set is *synthetically generated*, and a model trained on
+it learns that **generator's fingerprint** — the specific attack/renderer signature
+of one pipeline — rather than fraud in general. On the public (and private) test
+data the generator is different, so the in-domain skill did not transfer.
+
+So the design goal became simple: **make the model see more attack types and more
+document types, so it has to learn fraud itself, not one generator.** We pursued that
+along three levers:
+
+1. **Realistic, annotation-driven augmentation** — synthetic attacks (portrait swap,
+   text-field edit, erase-and-retype) placed precisely on each template rather than
+   as random noise (see [Attack-placement metadata](#attack-placement-metadata-annotationstype_fieldsjson)).
+2. **External real data (IDNet)** — 80,000 genuine identity documents from 10 more
+   countries mixed into training, so fraud is seen across many sources at once and
+   the generator fingerprint can no longer be memorized.
+3. **Higher input resolution** — increasing the letterbox from 322×518 to 448×728
+   (nearly doubling the patch tokens the model sees, 851 → 1664) measurably improved
+   the score. Larger sizes were a promising but compute-bounded direction we could
+   not fully explore within the time budget — each 448×728 epoch already took ≈5h on
+   a single RTX A4500.
+
+To choose between candidates we validated on **held-out external data (IDNet)**
+rather than the in-domain or public-leaderboard signal — which, in hindsight, was the
+only signal that predicted the actual private-test outcome. The final two-pick
+submission is the direct expression of this: `cv3` (the in-domain bet) and `cv5` (the
+generalized bet), described next.
 
 ## The leading submission — cv5
 
@@ -53,7 +90,7 @@ data: a **re-aggregation of the per-patch MIL scores** and **4-scale test-time a
 | **Resolution** | 448×728, letterboxed |
 | **Inference-time enhancements** | patch re-aggregation (top-5% + attention, w=0.25/0.75) + 4-scale logit-avg TTA (0.85/0.9/1.0/1.1) |
 | **Public leaderboard** | 0.00191 |
-| **Private leaderboard (provisional)** | **0.0582 — currently rank 1** |
+| **Private leaderboard** | **0.0582 — 1st place** |
 
 Everything needed to retrain, re-run, and independently verify this exact model is in this
 repository — see [Training](#training) and [Docker / reproduction](#docker--reproduction).
@@ -87,7 +124,7 @@ Both models' prediction distributions shifted by a similar amount from public to
 (see the technical report's diversity/overfitting analysis for the full statistics) — but only
 one of them had ever been shown to handle that kind of shift correctly *before* the private
 set was released. That evidence — not the public leaderboard number — is what we built the
-final decision on, and it is what currently separates a leading private-LB rank from
+final decision on, and it is what separated the 1st-place private-LB rank from
 a solution that would have finished far lower.
 
 ## Attack-placement metadata (`annotations/type_fields.json`)
@@ -127,7 +164,7 @@ the actual Kaggle submissions (see [Docker / reproduction](#docker--reproduction
 | Pick | Model | Training data | Public LB (rank) | Private LB | Kaggle CSV (sha256) |
 |---|---|---|---|---|---|
 | 1 | `cv3` | FREUID only (fold-0 split, ~80% of train) | 0.00060 (13th) | 0.2837 | `final_cv3_pagg_tta4_full.csv` — `d31f9b0163da7b3aa374b4c92cc2781b47650992c5655afcc46d381492c06048` |
-| **2 (leading)** | `cv5_ep2` | 100% FREUID + 80k IDNet images (all 10 countries) | 0.00191 | **0.0582** | `final_cv5_pagg_tta4_full.csv` — `c757f5ce81388fcd2796170387d2a75b4c87b96b383c617aa8aea72f2d9e0c5a` |
+| **2 (winning)** | `cv5_ep2` | 100% FREUID + 80k IDNet images (all 10 countries) | 0.00191 | **0.0582 (1st)** | `final_cv5_pagg_tta4_full.csv` — `c757f5ce81388fcd2796170387d2a75b4c87b96b383c617aa8aea72f2d9e0c5a` |
 
 Both picks use **identical inference-time options** — patch re-aggregation (top-5% of patch
 logits, branch weight 0.25) plus 4-scale logit-averaged TTA (0.85/0.9/1.0/1.1) — and come from
@@ -152,7 +189,10 @@ different GPU hardware is not guaranteed; rank-identical scores are.
   region swap, text-field edit, erase-and-retype) placed using the per-template face/field
   boxes described [above](#attack-placement-metadata-annotationstype_fieldsjson),
   implemented in [`src/augment.py`](src/augment.py).
-- **Resolution:** 448×728, letterboxed (aspect-preserving).
+- **Resolution:** 448×728, letterboxed (aspect-preserving). Raising the letterbox
+  from an earlier 322×518 to 448×728 (851 → 1664 patch tokens) measurably improved
+  the score; larger sizes were compute-bounded (≈5h/epoch on one A4500) and left as
+  future work.
 - **Loss:** Focal BCE (α=0.25, γ=2.0) on the whole-image logit.
 - **Validation / selection protocol:** in-domain FREUID validation does not reliably predict
   generalization (established repeatedly during development), so every design decision that
@@ -186,7 +226,7 @@ splits/
   folds.csv           Stratified 5-fold split of the FREUID training set (fold 0 used)
 weights/
   cv3_fold0.pt        Pick 1: FREUID-only, fold 0, epoch 1 — LEAN checkpoint
-  cv5_full_ep2.pt     Pick 2 (leading, provisional): full-data FREUID+IDNet, epoch 2 — LEAN checkpoint
+  cv5_full_ep2.pt     Pick 2 (winning): full-data FREUID+IDNet, epoch 2 — LEAN checkpoint
 Dockerfile            Reproducibility container (see "Docker / reproduction" below)
 docker/
   prepare_submission.py  Container entrypoint (loads weights, runs inference + TTA + pagg)
@@ -281,7 +321,7 @@ patch-aggregation settings for both picks).
 ```bash
 docker build -t freuid-repro:local .
 
-# LEADING SUBMISSION (provisional) — reproduces Kaggle submission "final_cv5_pagg_tta4_full.csv"
+# WINNING SUBMISSION — reproduces Kaggle submission "final_cv5_pagg_tta4_full.csv"
 # (cv5_ep2 weights + patch re-agg top-5%/w=0.25 + 4-scale TTA):
 docker run --rm --gpus all \
   --network none \
