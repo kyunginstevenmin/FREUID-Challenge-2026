@@ -8,7 +8,7 @@ Example:
       --res 322x518 --aug strong --sbi 0.25 --tag v1
 """
 from __future__ import annotations
-import os, sys, time, argparse, math, json
+import os, sys, time, argparse, math, json, random
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 import numpy as np, pandas as pd, torch, cv2
@@ -197,6 +197,9 @@ def main():
     ap.add_argument("--attacks", type=str, default="self_blend", choices=["self_blend", "full"],
                     help="self_blend=cv1/cv2 recipe; full=cue2-style annotation-driven suite")
     ap.add_argument("--lora_r", type=int, default=16)
+    ap.add_argument("--seed", type=int, default=42,
+                    help="seeds python/numpy/torch (LoRA-A + head init, data order, aug draws); "
+                         "cudnn.benchmark stays on, so runs are seeded but not bit-identical")
     ap.add_argument("--head_type", type=str, default="patch", choices=["patch", "mac", "attnpool"],
                     help="patch = per-patch MIL (default), attnpool = feature-level attention pooling, mac = multi-aspect global pooling")
     ap.add_argument("--lr_head", type=float, default=1e-3)
@@ -225,6 +228,8 @@ def main():
                          "(in-domain FREUID val proved unreliable for ranking checkpoints, even the "
                          "'hard'/corrupted proxy -- see ROADMAP 2026-07-08 entries)")
     args = ap.parse_args()
+    random.seed(args.seed); np.random.seed(args.seed)
+    torch.manual_seed(args.seed); torch.cuda.manual_seed_all(args.seed)
     H, W = (int(v) for v in args.res.lower().split("x"))
 
     df = pd.read_csv(os.path.join(ROOT, "splits", "folds.csv"))
