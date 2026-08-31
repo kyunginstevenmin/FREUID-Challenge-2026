@@ -54,6 +54,27 @@ class PatchHead(nn.Module):
         return img, plog
 
 
+class AttnPoolHead(nn.Module):
+    """Attention pooling over patch tokens (attentive-probe style) -> MLP -> 1 logit.
+
+    Aggregate-then-score counterpart to PatchHead's score-then-aggregate MIL:
+    identical gate (Linear(dim,1) + softmax) and MLP capacity, but pooling happens
+    in FEATURE space before scoring, so the ablation isolates aggregation order.
+    """
+    def __init__(self, dim, n_prefix, hidden=512, p=0.3):
+        super().__init__()
+        self.n_prefix = n_prefix
+        self.norm = nn.LayerNorm(dim)
+        self.attn = nn.Linear(dim, 1)
+        self.mlp = nn.Sequential(nn.Linear(dim, hidden), nn.GELU(), nn.Dropout(p), nn.Linear(hidden, 1))
+
+    def forward(self, tokens):
+        patch = self.norm(tokens[:, self.n_prefix:])             # B, N, D
+        aw = torch.softmax(self.attn(patch).squeeze(-1), dim=1)  # B, N
+        feat = (patch * aw.unsqueeze(-1)).sum(1)                 # B, D
+        return self.mlp(feat).squeeze(1)
+
+
 class FreuidModel(nn.Module):
     def __init__(self, backbone="vit_large_patch14_reg4_dinov2", pretrained=True,
                  lora_r=16, lora_alpha=32, lora_dropout=0.05, only_last=None,
@@ -66,8 +87,12 @@ class FreuidModel(nn.Module):
         n = inject_lora(self.backbone, r=lora_r, alpha=lora_alpha,
                         dropout=lora_dropout, only_last=only_last)
         self.head_type = head_type
-        self.head = (PatchHead(dim, self.n_prefix, head_hidden, p=head_dropout)
-                     if head_type == "patch" else MACHead(dim, self.n_prefix, head_hidden, head_dropout))
+        if head_type == "patch":
+            self.head = PatchHead(dim, self.n_prefix, head_hidden, p=head_dropout)
+        elif head_type == "attnpool":
+            self.head = AttnPoolHead(dim, self.n_prefix, head_hidden, p=head_dropout)
+        else:
+            self.head = MACHead(dim, self.n_prefix, head_hidden, head_dropout)
         self.n_lora = n
 
     def trainable_params(self):

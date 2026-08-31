@@ -197,6 +197,8 @@ def main():
     ap.add_argument("--attacks", type=str, default="self_blend", choices=["self_blend", "full"],
                     help="self_blend=cv1/cv2 recipe; full=cue2-style annotation-driven suite")
     ap.add_argument("--lora_r", type=int, default=16)
+    ap.add_argument("--head_type", type=str, default="patch", choices=["patch", "mac", "attnpool"],
+                    help="patch = per-patch MIL (default), attnpool = feature-level attention pooling, mac = multi-aspect global pooling")
     ap.add_argument("--lr_head", type=float, default=1e-3)
     ap.add_argument("--lr_lora", type=float, default=2e-4)
     ap.add_argument("--wd", type=float, default=0.05)
@@ -287,7 +289,7 @@ def main():
                       num_workers=8, pin_memory=True)
            if idn_val is not None else None)
 
-    model = FreuidModel(lora_r=args.lora_r).cuda()
+    model = FreuidModel(lora_r=args.lora_r, head_type=args.head_type).cuda()
     nt = model.trainable_params()
     print(f"trainable {nt/1e6:.2f}M  lora_modules={model.n_lora}")
     head_p = [p for n, p in model.named_parameters() if p.requires_grad and "head" in n]

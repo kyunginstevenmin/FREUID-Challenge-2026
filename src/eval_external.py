@@ -55,7 +55,8 @@ def main():
         res = cargs.get("res", "448x728")
         H, W = (int(v) for v in res.lower().split("x"))
         lora_r = cargs.get("lora_r", 16)
-        model = FreuidModel(pretrained=False, lora_r=lora_r).to(device).eval()
+        model = FreuidModel(pretrained=False, lora_r=lora_r,
+                            head_type=cargs.get("head_type", "patch")).to(device).eval()
         model.load_state_dict(ck["model"])
 
         dl = DataLoader(IDNetEvalDS(pool, H, W), batch_size=args.eval_bs, shuffle=False,
