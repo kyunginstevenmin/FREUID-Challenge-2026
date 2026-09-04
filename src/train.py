@@ -200,6 +200,8 @@ def main():
     ap.add_argument("--seed", type=int, default=42,
                     help="seeds python/numpy/torch (LoRA-A + head init, data order, aug draws); "
                          "cudnn.benchmark stays on, so runs are seeded but not bit-identical")
+    ap.add_argument("--backbone", type=str, default="vit_large_patch14_reg4_dinov2",
+                    help="timm backbone id; saved in ckpt args for eval scripts to read")
     ap.add_argument("--head_type", type=str, default="patch", choices=["patch", "mac", "attnpool"],
                     help="patch = per-patch MIL (default), attnpool = feature-level attention pooling, mac = multi-aspect global pooling")
     ap.add_argument("--lr_head", type=float, default=1e-3)
@@ -294,7 +296,7 @@ def main():
                       num_workers=8, pin_memory=True)
            if idn_val is not None else None)
 
-    model = FreuidModel(lora_r=args.lora_r, head_type=args.head_type).cuda()
+    model = FreuidModel(backbone=args.backbone, lora_r=args.lora_r, head_type=args.head_type).cuda()
     nt = model.trainable_params()
     print(f"trainable {nt/1e6:.2f}M  lora_modules={model.n_lora}")
     head_p = [p for n, p in model.named_parameters() if p.requires_grad and "head" in n]
