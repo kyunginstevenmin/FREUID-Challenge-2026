@@ -15,6 +15,16 @@ longer exists, so the decision rules' noise yardstick changes to the per-run
 bootstrap CI on the 4k val (eval-sampling noise only; run-to-run variance is
 unquantified — stated limitation carried to the write-up). Seed 43 on the
 arms being compared is the pre-registered escalation for ambiguous outcomes.
+v3 (2026-09-03, **before any run was launched**): trained-L arm dropped at the
+project owner's direction — the frozen `weights/cv5_full_ep2.pt` (the report's
+ViT-L result) is now the sole L reference. Trained matrix: **B and S only, 2
+runs ≈ 10–12 h**. Consequences: (1) REF must be evaluated ONCE on the 4k
+tier-1 val to anchor its score and bootstrap CI (deterministic set, fixed
+pandas seeds — reproducible); (2) B-vs-REF is no longer a paired same-seed
+comparison, and REF's epoch was historically LB-assisted, making it a slightly
+optimistic bar — conservative for non-inferiority, stated in the write-up;
+(3) the head ablation no longer inherits an arm from this study — it is ON
+HOLD (see ABLATION.md status) and out of the runbook scope.
 
 **Becomes binding (drop DRAFT) when:** the `TBD-at-launch` margin below is
 filled in and the prerequisite code changes have landed. First launch freezes
@@ -40,10 +50,9 @@ the backbone this study adopts.
 
 | arm | backbone (timm) | params | embed dim | trained? | role |
 |-----|-----------------|--------|-----------|----------|------|
-| REF | `vit_large_patch14_reg4_dinov2` | ~304M | 1024 | no — frozen `weights/cv5_full_ep2.pt` | winning solution, fixed reference (private LB 0.0582) |
-| L | `vit_large_patch14_reg4_dinov2` | ~304M | 1024 | yes, seed 42 | retrained incumbent; **doubles as head-ablation arm A** (identical config) |
+| REF (= L point) | `vit_large_patch14_reg4_dinov2` | ~304M | 1024 | no — frozen `weights/cv5_full_ep2.pt` | winning solution AND the L capacity point; evaluated once on tier 1 to anchor score + CI. Caveats: unseeded, epoch historically LB-assisted (optimistic bar → conservative non-inferiority test) |
 | B | `vit_base_patch14_reg4_dinov2` | ~87M | 768 | yes, seed 42 | candidate (non-inferiority) |
-| S | `vit_small_patch14_reg4_dinov2` | ~22M | 384 | yes, seed 42 | capacity-curve point; prospective screening vehicle |
+| S | `vit_small_patch14_reg4_dinov2` | ~22M | 384 | yes, seed 42 | capacity-curve point; prospective screening vehicle (paired with B: same seed) |
 
 All three backbones share patch size 14 and 4 registers, so at fixed
 `--res 448x728` the token grid (32×52) and pixels-per-patch geometry — the
@@ -61,25 +70,23 @@ python src/train.py \
     --lim_idn 80000 --idn_val_n 4000 --select_on idnet \
     --workers 16 --save_every 250 \
     --head_type patch --seed 42 \
-    --backbone {vit_large|vit_base|vit_small}_patch14_reg4_dinov2 \
-    --tag bbabl_cv5_{L|B|S}_s42
+    --backbone {vit_base|vit_small}_patch14_reg4_dinov2 \
+    --tag bbabl_cv5_{B|S}_s42
 ```
 
-Only `--backbone` and `--tag` differ between runs. Run matrix: 3 arms × 1 seed
-(42) = 3 runs. Estimated cost on the RTX A4500 (FLOPs ∝ params at fixed
-tokens): L ≈ 25 h, B ≈ 7–8 h, S ≈ 2–4 h → **≈ 35 h GPU total**.
-Launch order: **B and S first (~10 h), L last** — if a run crashes or smokes
-out a recipe problem, it is discovered before the expensive L run is spent.
-Escalation (pre-registered): add seed 43 to the arms under comparison only if
-the decision rule lands ambiguous (rule 2's probe band), never to one arm alone.
+Only `--backbone` and `--tag` differ between runs. Run matrix: **2 trained runs**
+(B, S; seed 42) ≈ 10–12 h on the RTX A4500 (B ≈ 7–8 h, S ≈ 2–4 h); the L point
+is the frozen REF checkpoint, no L training. Before the runs: evaluate REF once
+on the 4k tier-1 val (`eval_external`-style, same freuid_score + bootstrap) to
+anchor the reference score and CI.
+Escalation (pre-registered): add seed 43 to B (and S if its readout matters to
+the decision) only if the decision rule lands ambiguous (rule 2's probe band).
 
 **Batch-size allowance (pre-registered, not a confound):** smaller backbones
 free VRAM, so `--bs` may be raised **only** with `--accum` lowered to keep the
 effective batch at 24 (e.g. B: `--bs 12 --accum 2`). At matched effective batch
 with identical data order this is gradient-equivalent, purely a wall-clock
-optimization. The actual bs/accum used is recorded per run in W&B. The L run
-uses the verbatim `--bs 6 --accum 4` so it remains byte-identical in config to
-head-ablation arm A.
+optimization. The actual bs/accum used is recorded per run in W&B.
 
 **Hyperparameter confound (stated up front):** `lora_r 16`, `lora_alpha 32`,
 `lr_lora 2e-4`, `lr_head`, dropout — all inherited unchanged from the L recipe,
@@ -148,24 +155,26 @@ GPU savings and stated here so the final write-up reports it.
 
 ## Decision rule (pre-registered)
 
-All runs share seed 42, so cross-arm comparisons are paired (identical data
-order/aug draws). Let `Δ(X)` = tier-1 deficit of arm X's run vs the L run
-(positive = worse), and `CIhw(L)` = half-width of L's tier-1 bootstrap 95% CI
-(the only pre-registered noise yardstick; it covers eval-set sampling, NOT
-run-to-run variance — that limitation rides with every conclusion below).
+B and S share seed 42 (paired with each other: identical data order/aug
+draws). B-vs-REF is UNPAIRED — REF is a different, unseeded historical run;
+additionally REF's epoch pick was LB-assisted, so REF is a mildly optimistic
+bar (which makes the non-inferiority test conservative). Let `Δ(X)` = tier-1
+deficit of arm X vs REF's anchored tier-1 score (positive = worse), and
+`CIhw(REF)` = half-width of REF's tier-1 bootstrap 95% CI (the pre-registered
+noise yardstick; covers eval-set sampling, NOT run-to-run variance — that
+limitation rides with every conclusion below).
 
-1. **Adopt B for iteration** (the head ablation and future experiments run on
-   B) if the bootstrap CIs of B and L overlap (equivalently `Δ(B) ≲ 2·CIhw(L)`
-   — overlap is the operative test). Otherwise the head ablation proceeds on L
-   as originally registered.
-2. **lr probe trigger:** if the CIs are disjoint but `Δ(B) ≤ 4·CIhw(L)`
+1. **Adopt B for iteration** (future experiments, incl. any head ablation, run
+   on B) if the bootstrap CIs of B and REF overlap. Otherwise iteration stays
+   on L.
+2. **lr probe trigger:** if the CIs are disjoint but `Δ(B) ≤ 4·CIhw(REF)`
    (narrow loss), run the one pre-registered lr probe; re-apply rule 1 with the
-   probe replacing B-s42. If `Δ(B) > 4·CIhw(L)` (clear loss), stop: L's
+   probe replacing B-s42. If `Δ(B) > 4·CIhw(REF)` (clear loss), stop: L's
    capacity is earning its cost, and the 25 h/run price is now evidence-backed.
 3. **S is not adoption-eligible** for iteration or deployment regardless of
    score. Readout: where `Δ(S)` lands relative to `Δ(B)` maps the capacity
    curve. S becomes the default screening vehicle for cheap recipe-level
-   pilots only if `Δ(S) ≤ 6·CIhw(L)`; screening validity is then checked
+   pilots only if `Δ(S) ≤ 6·CIhw(REF)`; screening validity is then checked
    opportunistically — any future intervention run on both S and the adopted
    backbone is logged as a rank-agreement data point.
 4. **Deployment margin (used at end of program):** the final candidate is
@@ -178,19 +187,14 @@ smaller models sometimes win under a recipe tuned at higher capacity and 5
 epochs of LoRA; a win triggers the same rules, not celebration-driven scope
 creep).
 
-## Consequence for the head ablation (recorded here, mirrored in ABLATION.md v3)
+## Consequence for the head ablation
 
-- This study's L run (`bbabl_cv5_L_s42`) is config-identical to head-ablation
-  arm A (`patch`, L, cv5 recipe, seed 42) and satisfies it without retraining.
-- If rule 1 adopts B: the head ablation's trained arms run on backbone B; its
-  patch arm is this study's B run (also free), so the head ablation shrinks to
-  **1 attnpool run ≈ 8 h** (≈ 25 h if staying on L).
-- **Accepted weakening:** deciding the head on B answers "does attnpool beat
-  patch on the adopted backbone," not "does attnpool beat the winning solution
-  in its own (L) regime." REF stays the frozen L-based reference either way.
-  Risk of a head×backbone interaction is accepted as low (Zhai et al. 2021:
-  head architecture is second-order under full training) but is a real caveat
-  the write-up must state.
+The head ablation is **ON HOLD** (ABLATION.md carries the status note) and no
+longer inherits any arm from this study — with no trained L run, there is no
+free patch baseline. If/when it is revived, its arms are decided then: if rule
+1 adopted B, its patch arm is this study's B run (free) and only attnpool
+trains (≈ 8 h); on L, both arms would need training. Head×backbone interaction
+caveat (Zhai et al. 2021) applies if the head is decided on B.
 
 ## Failure-mode analysis (after the numbers)
 

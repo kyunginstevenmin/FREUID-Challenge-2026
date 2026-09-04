@@ -1,5 +1,11 @@
 # Head-type ablation protocol (pre-registered)
 
+> **STATUS (2026-09-03): ON HOLD.** Deferred at the project owner's direction
+> until after the backbone study (whose v3 dropped the trained-L arm this
+> protocol's arm A was to reuse). Nothing below launches as-is: a revision (v5)
+> re-deciding arms/backbone is required before any head-ablation run. Out of
+> RUNBOOK-EC2.md scope until then.
+
 **Revision history.** v1 (2026-08-31): cv3/FREUID-only regime, EST/SVK blind readout.
 v2 (2026-08-31, same day, **before any run was launched**): switched to the cv5
 (winning-submission) regime at the project owner's direction — the question is now

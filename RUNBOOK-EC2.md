@@ -1,7 +1,8 @@
 # EC2 training runbook — ablation program
 
-Operational doc for running the backbone + head ablations
-([BACKBONE_ABLATION.md](BACKBONE_ABLATION.md), [ABLATION.md](ABLATION.md)) on EC2.
+Operational doc for running the **backbone ablation**
+([BACKBONE_ABLATION.md](BACKBONE_ABLATION.md)) on EC2. The head ablation is on
+hold (see ABLATION.md status) and out of scope here until revived.
 Companion: [PROFILING.md](PROFILING.md) (benchmark method). Edit freely.
 
 Fill these once and use throughout:
@@ -128,7 +129,7 @@ expected. The S3 copy is the durable record; the instance is disposable.
 
 ## 7. Cost envelope (sanity, from the ≈5 h/epoch A4500 anchor)
 
-- Backbone study (~35 h, single-seed v2) + head study (~8–25 h) ≈ 45–60 h A4500-equivalent.
-- g5.4xlarge spot ≈ $0.6–0.8/h → **≈ $30–50 total**; on-demand ≈ 2.5×.
+- Backbone study v3: B + S only ≈ 10–12 h A4500-equivalent (+ a short REF tier-1 eval, no training).
+- g5.4xlarge spot ≈ $0.6–0.8/h → **≈ $10–15 total**; on-demand ≈ 2.5×.
 - Storage/transfer: S3 ≈ $0.023/GB/mo, free within-region to EC2 — noise next to compute.
 - If any single line item projects > $150, stop and re-benchmark before proceeding.
