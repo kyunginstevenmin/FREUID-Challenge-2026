@@ -8,15 +8,20 @@ the authoritative spec of items 1a–1c.
 
 ## 1. `--backbone` plumbing (prerequisite for any run)
 
-- [ ] 1a. `train.py`: add `--backbone` (default `vit_large_patch14_reg4_dinov2`),
+- [x] 1a. `train.py`: add `--backbone` (default `vit_large_patch14_reg4_dinov2`),
       pass through to `FreuidModel`, confirm it lands in the checkpoint `args` dict.
+      (2026-09-04: verified on g5.xlarge — 16-image micro-run, backbone present in
+      both last + best ckpt args; model rebuilt from ckpt args alone.)
 - [ ] 1b. Eval/infer scripts (`infer*.py`, `tta_*.py`, `patch_agg_grid.py`,
       `pagg_tta_combo.py`, `cv3_postproc_eval.py`, `eval_external.py`,
       `make_lean_ckpt.py`): construct model with
       `ck["args"].get("backbone", "vit_large_patch14_reg4_dinov2")` so every
       existing checkpoint keeps loading.
-- [ ] 1c. Per new backbone (B, S): forward+backward smoke test at 448×728;
+- [x] 1c. Per new backbone (B, S): forward+backward smoke test at 448×728;
       verify token grid 32×52, embed dim (768 / 384), trainable = LoRA+head only.
+      (2026-09-04, g5.xlarge: B 2.76M trainable / S 1.38M, 48 LoRA modules each,
+      grads on LoRA A/B + head only. Note: LoRA params are named `.A`/`.B`,
+      not `lora_*` — filter accordingly in any future trainable-param checks.)
 
 ## 2. Run-spec + tracking infrastructure
 
