@@ -128,7 +128,7 @@ expected. The S3 copy is the durable record; the instance is disposable.
 
 ## 7. Cost envelope (sanity, from the ≈5 h/epoch A4500 anchor)
 
-- Backbone study (~73 h) + head study (~50 h) ≈ 123 h A4500-equivalent.
-- g5.4xlarge spot ≈ $0.6–0.8/h → **≈ $75–100 total**; on-demand ≈ 2.5×.
+- Backbone study (~35 h, single-seed v2) + head study (~8–25 h) ≈ 45–60 h A4500-equivalent.
+- g5.4xlarge spot ≈ $0.6–0.8/h → **≈ $30–50 total**; on-demand ≈ 2.5×.
 - Storage/transfer: S3 ≈ $0.023/GB/mo, free within-region to EC2 — noise next to compute.
 - If any single line item projects > $150, stop and re-benchmark before proceeding.
