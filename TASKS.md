@@ -12,11 +12,16 @@ the authoritative spec of items 1a–1c.
       pass through to `FreuidModel`, confirm it lands in the checkpoint `args` dict.
       (2026-09-04: verified on g5.xlarge — 16-image micro-run, backbone present in
       both last + best ckpt args; model rebuilt from ckpt args alone.)
-- [ ] 1b. Eval/infer scripts (`infer*.py`, `tta_*.py`, `patch_agg_grid.py`,
+- [x] 1b. Eval/infer scripts (`infer*.py`, `tta_*.py`, `patch_agg_grid.py`,
       `pagg_tta_combo.py`, `cv3_postproc_eval.py`, `eval_external.py`,
       `make_lean_ckpt.py`): construct model with
       `ck["args"].get("backbone", "vit_large_patch14_reg4_dinov2")` so every
       existing checkpoint keeps loading.
+      (2026-09-05, commit 903d376: all 12 sites, `head_type` threaded alongside;
+      docker/ left untouched — frozen submission path. Also fixed make_lean_ckpt's
+      module-level ViT-L constant: strip set + verify reference now come from the
+      checkpoint's own args. py_compile clean; GPU round-trip of a B/S ckpt rides
+      along with the 3a smoke run.)
 - [x] 1c. Per new backbone (B, S): forward+backward smoke test at 448×728;
       verify token grid 32×52, embed dim (768 / 384), trainable = LoRA+head only.
       (2026-09-04, g5.xlarge: B 2.76M trainable / S 1.38M, 48 LoRA modules each,
