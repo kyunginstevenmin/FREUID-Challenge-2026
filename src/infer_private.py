@@ -84,7 +84,9 @@ def main():
         raise SystemExit("nothing to predict -- check --private_dir")
 
     ck = torch.load(args.ckpt, map_location="cpu", weights_only=False)
-    model = FreuidModel(pretrained=False, lora_r=ck["args"].get("lora_r", 16)).cuda().eval()
+    model = FreuidModel(backbone=ck["args"].get("backbone", "vit_large_patch14_reg4_dinov2"),
+                        pretrained=False, lora_r=ck["args"].get("lora_r", 16),
+                        head_type=ck["args"].get("head_type", "patch")).cuda().eval()
     model.load_state_dict(ck["model"])
     head = model.head
 

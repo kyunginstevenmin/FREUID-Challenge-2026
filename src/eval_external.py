@@ -55,7 +55,8 @@ def main():
         res = cargs.get("res", "448x728")
         H, W = (int(v) for v in res.lower().split("x"))
         lora_r = cargs.get("lora_r", 16)
-        model = FreuidModel(pretrained=False, lora_r=lora_r,
+        model = FreuidModel(backbone=cargs.get("backbone", "vit_large_patch14_reg4_dinov2"),
+                            pretrained=False, lora_r=lora_r,
                             head_type=cargs.get("head_type", "patch")).to(device).eval()
         model.load_state_dict(ck["model"])
 

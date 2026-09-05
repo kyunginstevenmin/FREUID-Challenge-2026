@@ -82,13 +82,15 @@ def main():
         cargs = ck.get("args", {})
         res = cargs.get("res", "322x518"); H, W = (int(v) for v in res.lower().split("x"))
         lora_r = cargs.get("lora_r", 16)
+        bb = cargs.get("backbone", "vit_large_patch14_reg4_dinov2")
+        ht = cargs.get("head_type", "patch")
         print(f"-- {os.path.basename(c)} res={H}x{W} val={ck.get('val')}")
         if "model_lean" in ck:   # LoRA+head only -> rebuild DINOv2 from timm (pretrained)
-            model = FreuidModel(pretrained=True, lora_r=lora_r).to(device).eval()
+            model = FreuidModel(backbone=bb, pretrained=True, lora_r=lora_r, head_type=ht).to(device).eval()
             missing, unexpected = model.load_state_dict(ck["model_lean"], strict=False)
             assert not unexpected, f"unexpected keys: {unexpected[:3]}"
         else:                    # full checkpoint (backbone included)
-            model = FreuidModel(pretrained=False, lora_r=lora_r).to(device).eval()
+            model = FreuidModel(backbone=bb, pretrained=False, lora_r=lora_r, head_type=ht).to(device).eval()
             model.load_state_dict(ck["model"])
         if args.tta_scales:
             scales = [float(s) for s in args.tta_scales.split(",") if s.strip()]

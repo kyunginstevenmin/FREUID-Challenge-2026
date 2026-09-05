@@ -19,11 +19,8 @@ import timm
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from model import FreuidModel
 
-BACKBONE = "vit_large_patch14_reg4_dinov2"
-
-
-def backbone_key_set() -> set[str]:
-    ref = timm.create_model(BACKBONE, pretrained=True, num_classes=0, dynamic_img_size=True)
+def backbone_key_set(backbone: str) -> set[str]:
+    ref = timm.create_model(backbone, pretrained=True, num_classes=0, dynamic_img_size=True)
     keys = set()
     for k in ref.state_dict():
         keys.add("backbone." + k)
@@ -41,7 +38,9 @@ def main():
     args = ap.parse_args()
 
     ck = torch.load(args.full, map_location="cpu", weights_only=False)
-    bkeys, ref_sd = backbone_key_set()
+    cargs = ck.get("args") or {}
+    bb = cargs.get("backbone", "vit_large_patch14_reg4_dinov2")
+    bkeys, ref_sd = backbone_key_set(bb)
 
     if args.verify:
         n_eq = n_cmp = 0
@@ -62,10 +61,11 @@ def main():
     print(f"wrote {args.out}: {len(lean)} tensors, {os.path.getsize(args.out)/1e6:.1f} MB")
 
     if args.verify and torch.cuda.is_available():
-        lora_r = (ck.get("args") or {}).get("lora_r", 16)
-        mf = FreuidModel(pretrained=False, lora_r=lora_r).cuda().eval()
+        lora_r = cargs.get("lora_r", 16)
+        ht = cargs.get("head_type", "patch")
+        mf = FreuidModel(backbone=bb, pretrained=False, lora_r=lora_r, head_type=ht).cuda().eval()
         mf.load_state_dict(ck["model"])
-        ml = FreuidModel(pretrained=True, lora_r=lora_r).cuda().eval()
+        ml = FreuidModel(backbone=bb, pretrained=True, lora_r=lora_r, head_type=ht).cuda().eval()
         missing, unexpected = ml.load_state_dict(lean, strict=False)
         assert not unexpected, unexpected[:3]
         x = torch.randn(2, 3, 448, 728).cuda()
