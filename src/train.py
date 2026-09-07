@@ -231,6 +231,12 @@ def build_parser():
                     help="checkpoint-selection criterion. idnet = the ONLY leak-free signal we have "
                          "(in-domain FREUID val proved unreliable for ranking checkpoints, even the "
                          "'hard'/corrupted proxy -- see ROADMAP 2026-07-08 entries)")
+    ap.add_argument("--wandb", action="store_true",
+                    help="log this run to Weights & Biases (config + per-epoch metrics). Off by "
+                         "default so smoke/debug runs stay out of the project; run id is "
+                         "<tag>_<vname> with resume='allow', so --resume continues the same W&B "
+                         "run -- restarting a tag from scratch should use a fresh tag")
+    ap.add_argument("--wandb_project", type=str, default="freuid-ablation")
     return ap
 
 def validate_cfg(cfg, ap):
@@ -347,6 +353,14 @@ def main():
           f"res={H}x{W} aug_groups={sorted(groups)} sbi={args.sbi} attacks={args.attacks} "
           f"select_on={args.select_on}")
 
+    wb = None
+    if args.wandb:
+        import wandb
+        wb = wandb.init(project=args.wandb_project, name=f"{args.tag}_{vname}",
+                        id=f"{args.tag}_{vname}", resume="allow",
+                        config={**vars(args), "n_train": len(tr), "n_val": len(va),
+                                "n_idnet_val": 0 if idn_val is None else len(idn_val)})
+
     tds = TrainDS(tr.id.tolist(), tr.label.values, tr.type.tolist(), H, W, groups, args.sbi, args.attacks,
                  sources=tr.source.tolist(), paths=tr.path.tolist())
     vds = ValDS(va.id.tolist(), va.label.values, H, W)
@@ -428,6 +442,15 @@ def main():
             msg += f" | HELDOUT-IDNet FREUID={idf:.4f}(AUC={1-ida:.4f},APCER@1%={idapc:.4f})"
         msg += f" | train={train_t:.0f}s({tput:.1f}img/s)"
         print(msg, flush=True)
+        if wb is not None:
+            log = {"train/loss": run / max(1, it + 1), "train/sec": train_t,
+                   "train/img_per_s": tput, "lr": sched.get_last_lr()[0],
+                   "clean/freuid": f, "clean/audet": a, "clean/apcer": apc}
+            if hf is not None:
+                log.update({"hard/freuid": hf, "hard/audet": ha, "hard/apcer": hap})
+            if idf is not None:
+                log.update({"idnet/freuid": idf, "idnet/audet": ida, "idnet/apcer": idapc})
+            wb.log(log, step=ep)
         save_state(ep)
         if sel < best["freuid"]:
             best = {"freuid": float(sel), "clean": float(f), "hard": (float(hf) if hf is not None else None),
@@ -436,10 +459,14 @@ def main():
             torch.save({"model": model.state_dict(), "args": vars(args), "val": best}, best_path)
             np.save(os.path.join(OOF_DIR, f"valpred_{args.tag}_{vname}.npy"), p)
             np.save(os.path.join(OOF_DIR, f"valid_{args.tag}_{vname}.npy"), va.id.values)
+            if wb is not None:
+                wb.summary.update({f"best/{k}": v for k, v in best.items()})
     print(f"BEST {vname}: sel(FREUID)={best['freuid']:.4f} clean={best.get('clean'):.4f} "
           f"hard={best.get('hard')} (ep{best.get('epoch')})")
     with open(os.path.join(CKPT_DIR, f"{args.tag}_{vname}.json"), "w") as fjson:
         json.dump(best, fjson, indent=2)
+    if wb is not None:
+        wb.finish()
 
 
 if __name__ == "__main__":
