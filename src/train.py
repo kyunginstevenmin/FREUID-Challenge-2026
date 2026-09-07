@@ -11,7 +11,7 @@ from __future__ import annotations
 import os, sys, time, argparse, math, json, random
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-import numpy as np, pandas as pd, torch, cv2
+import numpy as np, pandas as pd, torch, cv2, yaml
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
@@ -175,9 +175,11 @@ def evaluate(model, dl):
     f, a, ap = freuid_score(y, p)
     return f, a, ap, p
 
-
-def main():
-    ap = argparse.ArgumentParser()
+def build_parser():
+    ap = argparse.ArgumentParser(allow_abbrev=False)
+    ap.add_argument("--config", type=str, default=None,
+                    help="YAML run config; precedence: argparse defaults < YAML < flags "
+                         "explicitly typed on the CLI (detected via a SUPPRESS-defaults twin parse)")
     ap.add_argument("--holdout", type=str, default=None)
     ap.add_argument("--fold", type=int, default=None)
     ap.add_argument("--full_data", action="store_true",
@@ -229,7 +231,69 @@ def main():
                     help="checkpoint-selection criterion. idnet = the ONLY leak-free signal we have "
                          "(in-domain FREUID val proved unreliable for ranking checkpoints, even the "
                          "'hard'/corrupted proxy -- see ROADMAP 2026-07-08 entries)")
-    args = ap.parse_args()
+    return ap
+
+def validate_cfg(cfg, ap):
+    """Hard-fail on anything a YAML config gets wrong: non-mapping file, unknown keys
+    (typo'd hyperparameters must never become silently-default 10h runs), wrong types.
+    Values are coerced through each argparse action's own `type` callable so YAML and
+    CLI behave identically. Cross-flag consistency (fold vs full_data, idnet combos)
+    stays in main() -- it applies to pure-CLI runs too."""
+    if not isinstance(cfg, dict):
+        raise SystemExit(f"--config: expected a YAML mapping, got {type(cfg).__name__}")
+    if "config" in cfg:
+        raise SystemExit("--config: a config file may not set 'config'")
+    actions = {a.dest: a for a in ap._actions if a.dest != "help"}
+    unknown = set(cfg) - set(actions)
+    if unknown:
+        import difflib
+        hints = []
+        for k in sorted(unknown):
+            m = difflib.get_close_matches(k, actions, n=1)
+            hints.append(k + (f" (did you mean '{m[0]}'?)" if m else ""))
+        raise SystemExit("--config: unknown keys: " + ", ".join(hints))
+    out = {}
+    for k, v in cfg.items():
+        a = actions[k]
+        if isinstance(a, argparse._StoreTrueAction):
+            if not isinstance(v, bool):
+                raise SystemExit(f"--config: '{k}' must be true/false, got {v!r}")
+            out[k] = v
+        elif v is None or a.type is None:
+            out[k] = v
+        else:
+            try:
+                out[k] = a.type(v)
+            except (TypeError, ValueError):
+                raise SystemExit(f"--config: '{k}' = {v!r} is not a valid {a.type.__name__}")
+        if a.choices is not None and out[k] not in a.choices:
+            raise SystemExit(f"--config: '{k}' = {out[k]!r} not in {sorted(a.choices)}")
+    return out
+
+
+def resolve_args(argv=None):
+    """defaults < YAML < explicit CLI; see TASKS.md 2a. `argv` (list of CLI tokens)
+    defaults to sys.argv[1:] -- pass a list explicitly in tests."""
+    ap = build_parser()
+    defaults = vars(ap.parse_args([]))
+
+    aux = build_parser()
+    for a in aux._actions:            # SUPPRESS twin parse: namespace holds ONLY typed flags
+        a.default = argparse.SUPPRESS
+    explicit = vars(aux.parse_args(argv))
+
+    cfg = {}
+    cfg_path = explicit.get("config") or defaults.get("config")
+    if cfg_path:
+        with open(cfg_path) as f:
+            cfg = validate_cfg(yaml.safe_load(f) or {}, ap)
+    merged = {**defaults, **cfg, **explicit}
+    return argparse.Namespace(**merged)
+
+def main():
+    args = resolve_args()
+    with open(os.path.join(CKPT_DIR, f"{args.tag}_resolved.yaml"), "w") as f:
+        yaml.safe_dump(vars(args), f, sort_keys=True)   # run spec readable without loading a .pt
     random.seed(args.seed); np.random.seed(args.seed)
     torch.manual_seed(args.seed); torch.cuda.manual_seed_all(args.seed)
     H, W = (int(v) for v in args.res.lower().split("x"))

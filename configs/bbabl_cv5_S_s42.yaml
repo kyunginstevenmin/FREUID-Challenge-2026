@@ -1,0 +1,22 @@
+# Backbone ablation, arm S -- verbatim cv5 recipe (BACKBONE_ABLATION.md), one new lever.
+# Launch: python src/train.py --config configs/bbabl_cv5_S_s42.yaml
+full_data: true
+epochs: 5
+bs: 6
+accum: 4
+eval_bs: 8
+res: 448x728
+sbi: 0.25
+attacks: full
+idnet_countries: ESP_scanned,ALB_scanned,AZE_scanned,FIN_scanned,GRC_scanned,LVA_scanned,RUS_scanned,SRB_scanned,EST_scanned,SVK_scanned
+heldout_idnet: ""
+idn_val_from_unused: true
+lim_idn: 80000
+idn_val_n: 4000
+select_on: idnet
+workers: 16
+save_every: 250
+head_type: patch
+seed: 42
+backbone: vit_small_patch14_reg4_dinov2
+tag: bbabl_cv5_S_s42
