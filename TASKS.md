@@ -30,7 +30,12 @@ the authoritative spec of items 1a–1c.
 
 ## 2. Run-spec + tracking infrastructure
 
-- [ ] 2a. Config-per-run — hand-rolled `--config <yaml>`, spec:
+- [x] 2a. Config-per-run — hand-rolled `--config <yaml>`, spec:
+      (2026-09-07: done per spec below; acceptance test
+      `tests/test_resolve_args.py` passes locally — YAML≡CLI namespace equality,
+      precedence, 6 rejection cases. Kyungin wrote build_parser/resolve_args
+      skeleton; Claude finished validation + wiring. W&B half of the
+      resolved-dump lands with 2b.)
       - Precedence: argparse defaults < YAML < flags explicitly typed on the CLI.
         (Detect "explicitly typed" by parsing with `argparse.SUPPRESS` defaults
         first, or by comparing `sys.argv` — pick one, document it in the help text.)
