@@ -51,9 +51,14 @@ the authoritative spec of items 1a–1c.
         `python src/train.py --config configs/bbabl_cv5_B_s42.yaml`.
       - No new dependency beyond pyyaml; NOT Hydra (decided 2026-09-04 —
         wrong size for this repo).
-- [ ] 2b. W&B wiring in `train.py`: per-epoch clean/hard/idnet metrics, full
+- [x] 2b. W&B wiring in `train.py`: per-epoch clean/hard/idnet metrics, full
       resolved args (backbone, head_type, seed, bs/accum), tag per arm.
       (Protocol already promises this — BACKBONE_ABLATION.md failure-mode section.)
+      (2026-09-07: `--wandb` opt-in flag + `--wandb_project` (default
+      freuid-ablation); run id `<tag>_<vname>` resume-safe; best metrics in
+      summary. NOTE for arm launches: pass `--wandb` on the CLI (kept out of the
+      committed arm YAMLs so config-driven smoke reruns stay quiet). Live W&B
+      round-trip rides with the 3a smoke run.)
 - [ ] 2c. (ride-along, roadmap table stakes) First unit tests: `freuid_metric`,
       `letterbox`, lean-ckpt round-trip, config loading. CI on push if cheap.
 - [ ] 2d. Opt-in `--profile` flag in `train.py`: `torch.profiler` per
