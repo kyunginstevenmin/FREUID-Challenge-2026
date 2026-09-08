@@ -17,10 +17,9 @@ import numpy as np, pandas as pd, torch
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data import ROOT
+from data import ROOT, IDNetEvalDS  # same dataset class train.py's per-epoch eval uses
 from model import FreuidModel
 from freuid_metric import freuid_score
-from train import IDNetEvalDS  # reuse exact same dataset class used during training eval
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.benchmark = True

@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data import ROOT, DATA, train_path, letterbox, to_tensor_norm, load_rgb
+from data import ROOT, DATA, train_path, letterbox, to_tensor_norm, load_rgb, IDNetEvalDS
 from augment import (build_transform, self_blend, region_swap, text_field_edit, erase_retype,
                      load_field_annotations, DEFAULT_GROUPS)
 from model import FreuidModel
@@ -126,21 +126,6 @@ def corrupt_fixed(img, seed):
     q = int(rng.integers(45, 75))
     _, e = cv2.imencode(".jpg", cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, q])
     return cv2.cvtColor(cv2.imdecode(e, 1), cv2.COLOR_BGR2RGB)
-
-
-class IDNetEvalDS(Dataset):
-    """Fixed HELDOUT-IDNet sample (unseen countries, clean/uncorrupted) -- the trustworthy
-    generalization gauge (zero leakage risk, unlike in-domain FREUID val which we proved
-    can rank checkpoints backwards). Selection criterion for the FREUID+IDNet mixed recipe."""
-    def __init__(self, df, H, W):
-        self.paths = df.path.values; self.y = df.label.values.astype(np.float32)
-        self.H, self.W = H, W
-
-    def __len__(self): return len(self.y)
-
-    def __getitem__(self, i):
-        img = letterbox(load_rgb(self.paths[i]), self.H, self.W)
-        return to_tensor_norm(img), float(self.y[i])
 
 
 class HardValDS(Dataset):

@@ -56,6 +56,22 @@ def to_tensor_norm(img: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(x.transpose(2, 0, 1)).contiguous()
 
 
+class IDNetEvalDS(Dataset):
+    """Fixed IDNet eval sample (clean/uncorrupted) -- the trustworthy generalization
+    gauge (zero leakage risk, unlike in-domain FREUID val which can rank checkpoints
+    backwards). Used by train.py's per-epoch eval and the standalone eval scripts.
+    `df` needs columns `path` (absolute) and `label`."""
+    def __init__(self, df, H, W):
+        self.paths = df.path.values; self.y = df.label.values.astype(np.float32)
+        self.H, self.W = H, W
+
+    def __len__(self): return len(self.y)
+
+    def __getitem__(self, i):
+        img = letterbox(load_rgb(self.paths[i]), self.H, self.W)
+        return to_tensor_norm(img), float(self.y[i])
+
+
 class FreuidDataset(Dataset):
     """Returns (image_tensor, label, index). transform: optional albumentations.
 
