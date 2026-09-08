@@ -75,7 +75,13 @@ the authoritative spec of items 1a–1c.
       only; `src/gpu_ceiling.py` mirrors the exact train step on a cached batch.
       Neither is in any launch config. Both exercised for real at 3c on the
       GPU box — untested on CUDA until then.)
-- [ ] 2e. Unified eval entry point (`src/evaluate.py`) — minimal version, spec:
+- [x] 2e. Unified eval entry point (`src/evaluate.py`) — minimal version, spec:
+      (2026-09-08: done per spec below. IDNetEvalDS moved train.py → data.py
+      (backwards import killed; train re-exports for parked sweep scripts).
+      tier1 builder MUST stay in lockstep with train.py's --idn_val_from_unused
+      branch — guarded by comment both sides, verified for real at 3b when REF's
+      tier1 number is anchored. Cache hits run GPU-free (torch imported lazily).
+      Pure parts unit-tested (35 total); inference path validated at 3b.)
       - Input: any checkpoint (backbone/head/res read from `ck["args"]`, per 1b)
         + a named protocol: `tier1` (the 4k disjoint IDNet val),
         `external` (full EST+SVK pool, today's eval_external.py), and a
