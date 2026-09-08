@@ -59,8 +59,14 @@ the authoritative spec of items 1a–1c.
       summary. NOTE for arm launches: pass `--wandb` on the CLI (kept out of the
       committed arm YAMLs so config-driven smoke reruns stay quiet). Live W&B
       round-trip rides with the 3a smoke run.)
-- [ ] 2c. (ride-along, roadmap table stakes) First unit tests: `freuid_metric`,
+- [x] 2c. (ride-along, roadmap table stakes) First unit tests: `freuid_metric`,
       `letterbox`, lean-ckpt round-trip, config loading. CI on push if cheap.
+      (2026-09-07: tests/ has metric (hand-computed cases, tie convention,
+      trapz cross-check), data (letterbox geometry, normalization), resolve_args.
+      GitHub Actions CI runs py_compile + all three on CPU torch. First run of
+      the tests caught a real bug: np.trapz removed in numpy 2.0 — fixed.
+      Lean round-trip deliberately NOT a unit test: `make_lean_ckpt --verify`
+      is that audit and needs GPU+weights.)
 - [ ] 2d. Opt-in `--profile` flag in `train.py`: `torch.profiler` per
       [PROFILING.md](PROFILING.md) Method (schedule wait=5 warmup=2 active=5,
       `tensorboard_trace_handler`), off by default — ablation runs stay clean.
