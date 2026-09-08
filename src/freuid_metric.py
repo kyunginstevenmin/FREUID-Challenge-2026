@@ -58,7 +58,7 @@ def _audet_trapz(y_true, scores) -> float:
     order = np.argsort(bpcer, kind="mergesort")
     x = bpcer[order]
     yv = apcer[order]
-    area = np.trapz(yv, x)
+    area = getattr(np, "trapezoid", getattr(np, "trapz", None))(yv, x)  # np.trapz removed in numpy 2.0
     return float(area)
 
 
