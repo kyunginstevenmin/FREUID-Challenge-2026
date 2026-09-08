@@ -67,10 +67,14 @@ the authoritative spec of items 1a–1c.
       the tests caught a real bug: np.trapz removed in numpy 2.0 — fixed.
       Lean round-trip deliberately NOT a unit test: `make_lean_ckpt --verify`
       is that audit and needs GPU+weights.)
-- [ ] 2d. Opt-in `--profile` flag in `train.py`: `torch.profiler` per
+- [x] 2d. Opt-in `--profile` flag in `train.py`: `torch.profiler` per
       [PROFILING.md](PROFILING.md) Method (schedule wait=5 warmup=2 active=5,
       `tensorboard_trace_handler`), off by default — ablation runs stay clean.
       Plus the GPU-ceiling microbenchmark script (fwd/bwd on one cached batch).
+      (2026-09-08: done — trace lands in profiles/<tag>/, first trained epoch
+      only; `src/gpu_ceiling.py` mirrors the exact train step on a cached batch.
+      Neither is in any launch config. Both exercised for real at 3c on the
+      GPU box — untested on CUDA until then.)
 - [ ] 2e. Unified eval entry point (`src/evaluate.py`) — minimal version, spec:
       - Input: any checkpoint (backbone/head/res read from `ck["args"]`, per 1b)
         + a named protocol: `tier1` (the 4k disjoint IDNet val),
