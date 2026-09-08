@@ -237,6 +237,10 @@ def build_parser():
                          "<tag>_<vname> with resume='allow', so --resume continues the same W&B "
                          "run -- restarting a tag from scratch should use a fresh tag")
     ap.add_argument("--wandb_project", type=str, default="freuid-ablation")
+    ap.add_argument("--profile", action="store_true",
+                    help="collect ONE torch.profiler trace (PROFILING.md method: wait=5 warmup=2 "
+                         "active=5, first epoch only) into profiles/<tag>/ for the TensorBoard "
+                         "trace viewer. Off by default; ablation launch configs never set it")
     return ap
 
 def validate_cfg(cfg, ap):
@@ -407,6 +411,16 @@ def main():
     for ep in range(start_ep, args.epochs):
         model.train(); t0 = time.time(); run = 0.0
         opt.zero_grad(set_to_none=True)
+        prof = None
+        if args.profile and ep == start_ep:   # one trace per run, first trained epoch
+            pdir = os.path.join(ROOT, "profiles", args.tag)
+            prof = torch.profiler.profile(
+                activities=[torch.profiler.ProfilerActivity.CPU,
+                            torch.profiler.ProfilerActivity.CUDA],
+                schedule=torch.profiler.schedule(wait=5, warmup=2, active=5, repeat=1),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(pdir))
+            prof.start()
+            print(f"profiling: trace -> {pdir} (view: tensorboard --logdir {pdir})", flush=True)
         for it, (x, y) in enumerate(tdl):
             x = x.cuda(non_blocking=True); y = y.cuda(non_blocking=True)
             with torch.autocast("cuda", dtype=torch.float16):
@@ -417,9 +431,13 @@ def main():
                 sched.step(); gstep += 1
                 if args.save_every and gstep % args.save_every == 0:
                     save_state(ep - 1)  # mid-epoch crash -> resume redoes this epoch (no data skipped)
+            if prof is not None:
+                prof.step()
             if (it + 1) % (args.accum * 25) == 0:
                 ips = (it + 1) * args.bs / (time.time() - t0)
                 print(f"  ep{ep} it{it+1}/{len(tdl)} loss={run/(it+1):.4f} lr={sched.get_last_lr()[0]:.2e} {ips:.1f}img/s", flush=True)
+        if prof is not None:
+            prof.stop()
         train_t = time.time() - t0; tput = len(tds) / train_t
         torch.cuda.empty_cache()
         f, a, apc, p = evaluate(model, vdl)
