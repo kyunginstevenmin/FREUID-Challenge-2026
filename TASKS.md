@@ -98,6 +98,23 @@ the authoritative spec of items 1a–1c.
 
 ## 3. End-to-end smoke run
 
+- [ ] 3-pre. Reconstruct `external/` (IDNet) — blocker for 3a's IDNet branch and
+      all of 3b. Status 2026-09-09: probed the official Zenodo release remotely
+      (fin.zip, record 10602369) — per country: `positive/` + 4 fraud folders ×
+      5,979 uniformly-sized doc-cropped JPEGs (.png ext), used as-shipped (no
+      preprocessing evident). Pool arithmetic (35,874 EST+SVK) ⇒ the index =
+      positives + exactly 2 of the 4 fraud folders per country; WHICH two is
+      the main open question. Asked upstream:
+      https://github.com/nadhirhasan/FREUID-Challenge-2026/issues/1 (also asks
+      for the index CSV itself). EU download plan: records 10611634 (ALB/EST/
+      ESP), 10602369 (AZE/FIN/GRC/SRB), 10570622 (LVA/RUS/SVK) ≈ 157GB of zips,
+      straight to EC2/S3, never through the laptop. Rebuild = committed script
+      `src/make_idnet_index.py` (roadmap: reproducible data pipeline). If we
+      rebuild without nadhir's reply: pre-registered amendment to
+      BACKBONE_ABLATION.md (REF trained on his 80k rows, B/S on ours — same
+      procedure/distribution, different rows; one more stated B-vs-REF
+      asymmetry).
+
 - [ ] 3a. `--limit 500 --epochs 1` run of the full loop (train → checkpoint →
       per-epoch eval → W&B log → best-ckpt JSON) on ViT-B config.
 - [ ] 3b. Anchor REF: evaluate frozen `weights/cv5_full_ep2.pt` once on the 4k
