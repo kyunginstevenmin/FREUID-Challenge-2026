@@ -107,8 +107,16 @@ the authoritative spec of items 1a–1c.
       the main open question. Asked upstream:
       https://github.com/nadhirhasan/FREUID-Challenge-2026/issues/1 (also asks
       for the index CSV itself). EU download plan: records 10611634 (ALB/EST/
-      ESP), 10602369 (AZE/FIN/GRC/SRB), 10570622 (LVA/RUS/SVK) ≈ 157GB of zips,
-      straight to EC2/S3, never through the laptop. Rebuild = committed script
+      ESP), 10602369 (AZE/FIN/GRC/SRB), 10570622 (LVA/RUS/SVK) ≈ 100GB of zips,
+      straight to EC2/S3, never through the laptop. Verified 2026-09-10 by
+      remote probe of ALL 10 EU zips: release perfectly uniform — 5 folders ×
+      5,979 imgs per country (29,895 each; 298,950 total). EST+SVK check:
+      reported 35,874 pool = EXACTLY positives + 2 fraud folders per country,
+      confirming the 3-of-5-folders construction for the two countries with a
+      ground-truth count. Remaining: (a) assumption that his selection was
+      uniform across the other 8 countries (⇒ 179,370-row index — the
+      acceptance count for make_idnet_index.py); (b) unknown WHICH two fraud
+      folders. Rebuild = committed script
       `src/make_idnet_index.py` (roadmap: reproducible data pipeline). If we
       rebuild without nadhir's reply: pre-registered amendment to
       BACKBONE_ABLATION.md (REF trained on his 80k rows, B/S on ours — same
