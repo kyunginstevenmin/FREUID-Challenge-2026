@@ -162,18 +162,18 @@ Zenodo (DOI-pinned, CC0)
 
 ## Acceptance Criteria
 
-- [ ] One command, fresh instance → identical S3 state (rerun converges; interrupted
-      run resumes; no manual steps).
-- [ ] 10/10 zips MD5-verified; checksums pinned in DATA.md and CHECKSUMS.
+- [x] One command, fresh instance → identical S3 state (rerun converges; interrupted
+      run resumes; no manual steps). (2026-09-11: proven the hard way — Phase 2's first attempt died on two env bugs (unzip needs mkdir -p target; Ubuntu needs python3.12-venv) and the rerun converged with zero rework. Both prereqs now baked into the runbook flow.)
+- [x] 10/10 zips MD5-verified; checksums pinned in DATA.md and CHECKSUMS. (2026-09-11)
 - [ ] Canonical index: 179,370 rows; EST+SVK slice 35,874; ids unique; `type` values
       exactly match the frozen config strings; label↔folder consistent.
 - [ ] Row-hash of (id,label,type) recorded; regeneration on a second machine
       reproduces it.
-- [ ] pytest index suite green on-box, skipped (not failed) in CI.
+- [x] pytest index suite green on-box, skipped (not failed) in CI. (2026-09-11: 7 passed on box incl. both real-data tests; 2 skipped locally/CI)
 - [ ] Folder-pair resolution recorded with its evidence (reply / fingerprint numbers
       / documented choice), and the BACKBONE_ABLATION.md amendment committed when
       exits (b)/(c) apply.
-- [ ] DATA.md answers "where did every byte come from" without this conversation.
+- [x] DATA.md answers "where did every byte come from" without this conversation. (docs/DATA.md — tracked, not external/, since provenance must be versioned)
 
 ## Dependencies & Risks
 
