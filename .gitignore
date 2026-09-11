@@ -14,3 +14,4 @@ report/*.blg
 report/*.fls
 report/*.fdb_latexmk
 report/*.toc
+docs/
