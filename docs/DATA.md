@@ -59,6 +59,21 @@ extracted (NOT the canonical training index):
 
 ## Open questions
 
+0. **⚠ MAJOR (2026-09-11, fingerprint session):** the as-shipped Zenodo images are
+   **not what the winning model trained on**. Evidence: REF (`cv5_full_ep2.pt`)
+   scores at CHANCE on every candidate EST+SVK pool (all 6 pairs ≈ FREUID 0.95–0.97,
+   AuDET ≈ 0.50, vs his published 0.0154) — and scores the as-shipped *positives*
+   fraud-ish (mean 0.70) despite training on 40k IDNet positives as genuine.
+   Pipeline verified correct the same session: identical stack on FREUID train
+   images gives perfect separation (genuine 0.082 / fraud 0.995, FREUID 0.0000).
+   ⇒ An image-level transformation (plausibly what `_scanned` denotes — e.g. a
+   print-scan simulation) sits between Zenodo and his index, unpublished.
+   Checked: the Sept-2024 Zenodo records are the same release re-partitioned, not
+   a scanned variant. Plan's exit (b) is dead as posed; exit (c) is compromised
+   too (a from-Zenodo tier-1 val anchors REF at chance, trivializing
+   non-inferiority). Prediction cache for the 59,790-image pass: S3
+   `preds/913c44823e78_estsvk_all_raw.csv`; per-pair table `results/fingerprint_raw.csv`.
+
 1. **Which 2 fraud folders** the original solution indexed — upstream ask:
    [nadhirhasan/FREUID-Challenge-2026#1](https://github.com/nadhirhasan/FREUID-Challenge-2026/issues/1)
    (no reply as of 2026-09-11); fallback = fingerprint test vs the report's
