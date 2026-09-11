@@ -469,6 +469,9 @@ def main():
     with open(os.path.join(CKPT_DIR, f"{args.tag}_{vname}.json"), "w") as fjson:
         json.dump(best, fjson, indent=2)
     if wb is not None:
+        wb.alert(title=f"run finished: {args.tag}_{vname}",
+                 text=f"best sel={best['freuid']:.4f} (ep{best.get('epoch')}); "
+                      f"clean={best.get('clean')} idnet={best.get('idnet')}")
         wb.finish()
 
 
