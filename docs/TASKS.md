@@ -123,14 +123,25 @@ the authoritative spec of items 1a–1c.
       procedure/distribution, different rows; one more stated B-vs-REF
       asymmetry).
 
-- [ ] 3a. `--limit 500 --epochs 1` run of the full loop (train → checkpoint →
+- [x] 3a. `--limit 500 --epochs 1` run of the full loop (train → checkpoint →
       per-epoch eval → W&B log → best-ckpt JSON) on ViT-B config.
+      (2026-09-11, g5.xlarge: config-file launch + CLI overrides verified in the
+      resolved dump; W&B run smoke3a_full live in freuid-ablation; ViT-B 2.76M
+      trainable; both ckpts rebuild from args; select_on=idnet silently fell
+      back to clean as predicted — consider a warning guard post-launch.
+      Kyungin fired the run. Note: resolved dump is named <tag>_resolved.yaml,
+      no vname.)
 - [ ] 3b. Anchor REF: evaluate frozen `weights/cv5_full_ep2.pt` once on the 4k
       tier-1 val (freuid_score + bootstrap CI) — required before B/S comparisons.
       Runs through `evaluate.py` (2e); doubles as its first real-checkpoint test.
-- [ ] 3c. Exercise `--profile` during the smoke run (GPU box): verify the trace
+- [x] 3c. Exercise `--profile` during the smoke run (GPU box): verify the trace
       opens in TensorBoard's trace viewer and `nvidia-smi dmon`/htop procedure
       works. Tooling shakeout only — real measurements happen at launch.
+      (2026-09-11: trace written (25.7MB, 98k events / 17.6k CUDA, valid
+      chrome-trace JSON; archived off-box) — full TensorBoard viewer check
+      deferred to 4d. gpu_ceiling.py ran clean: ViT-B 448x728 bs6 = 26.4 img/s
+      ceiling vs 15.1 real in the (profiler-polluted) smoke — suggestive of
+      input starvation, measure properly at 4d.)
 
 ## 4. Launch gate
 
