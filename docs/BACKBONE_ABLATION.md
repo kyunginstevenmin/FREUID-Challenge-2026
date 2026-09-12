@@ -203,3 +203,41 @@ identical images — does reduced capacity lose artifact-focus (misses
 high-frequency cues) or layout-focus (misses document structure)? Slice tier-1
 scores by document type and by attack type (`self_blend` vs annotation-driven).
 Every run logged to W&B with backbone, head_type, seed, bs/accum, and full args.
+
+---
+
+## Program closed (2026-09-12, before any arm was launched)
+
+**Status: PARKED — no trained run of any arm ever launched; the protocol was
+never unfrozen or violated.** Closure cause and evidence, for the record:
+
+The design's cost-saving premise (v3) was that the frozen `cv5_full_ep2.pt`
+serves as the L capacity point, anchored once on the tier-1 IDNet val. That
+requires reconstructing the winning solution's external-data distribution. The
+raw source (IDNet, Zenodo, CC0) is public and was fully mirrored and verified
+(see DATA.md), but the winning pipeline's derived training set was not released,
+and a fingerprint experiment (2026-09-11, `src/fingerprint_folders.py`;
+predictions cached in S3) showed it cannot be reconstructed from the release:
+REF scores at chance (AuDET ≈ 0.50, FREUID 0.95–0.97) on every candidate
+reconstruction of the reported 35,874-image EST+SVK pool — and scores the
+as-shipped genuine images as fraud-like (mean 0.70) despite having trained on
+80,000 of them as genuine — while the identical inference stack reproduces
+near-perfect separation on FREUID train data (genuine 0.082 / fraud 0.995,
+FREUID = 0.0000). The weights are genuine and the harness is correct; the
+external images the model saw were therefore a *transformed* version of the
+release (plausibly the literal meaning of the `_scanned` type codes), via an
+undocumented preprocessing step (upstream question filed:
+nadhirhasan/FREUID-Challenge-2026#1, unanswered at closure).
+
+Consequences: the B-vs-REF non-inferiority comparison is unanchorable as
+pre-registered. The paired B-vs-S capacity comparison remains valid on any
+frozen pool and may be revived as an internal tool of the successor project
+(beating the winning private score 0.0582 with an independently built solution
+— late submissions verified scored, 2026-09-12). A fully self-trained 3-arm
+redesign (~25h extra for a trained L) was considered and deliberately descoped
+in favor of that successor.
+
+Methodological note for the write-up: the reproducibility gap that closed this
+study is a single unscripted data-preparation step in an otherwise exemplary
+reproducibility package — the strongest concrete argument this project has
+produced for scripted end-to-end data pipelines as a release requirement.
