@@ -1,5 +1,13 @@
 # Task list — backbone ablation prep
 
+> **⚠ PARKED 2026-09-12.** The program is paused, not deleted: the fingerprint
+> session (docs/DATA.md, open-question 0) proved the as-shipped Zenodo IDNet
+> images are not what REF trained on, breaking the B-vs-REF anchor. New active
+> goal: beat the winning private score (0.0582) with our own solution — late
+> submissions confirmed scored (constant-probe test), full test images in hand.
+> Everything below remains valid history; steps 1–3 built infrastructure the
+> new project inherits wholesale. B-vs-S may return as a tool within it.
+
 Working order agreed 2026-09-04. Steps 1–3 are pipeline/skeleton work (Kyungin
 drives, Claude reviews — SWE/ML roadmap practice: config-driven runs, experiment
 tracking, testing). Step 4 is the launch gate. See
