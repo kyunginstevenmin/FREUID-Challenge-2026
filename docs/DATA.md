@@ -68,8 +68,14 @@ extracted (NOT the canonical training index):
    images gives perfect separation (genuine 0.082 / fraud 0.995, FREUID 0.0000).
    ⇒ An image-level transformation (plausibly what `_scanned` denotes — e.g. a
    print-scan simulation) sits between Zenodo and his index, unpublished.
-   Checked: the Sept-2024 Zenodo records are the same release re-partitioned, not
-   a scanned variant. Plan's exit (b) is dead as posed; exit (c) is compromised
+   Checked: the Sept-2024 Zenodo records are not a scanned variant — same
+   as-shipped render style. (Correction 2026-09-15, established during the
+   successor project's sampling build: they are a **regenerated sample**, not
+   a re-partition or superset — a different draw of synthetic persons
+   (Sept EST's positive filenames match Sept CA's, not Jan EST's), plus two
+   extra fraud folders per country (fraud5_inpaint_and_rewrite,
+   fraud6_crop_and_replace, with `_fake_<n>`-suffixed names) and a small
+   SIDTD_Generated folder. The two releases cannot be mixed per country.) Plan's exit (b) is dead as posed; exit (c) is compromised
    too (a from-Zenodo tier-1 val anchors REF at chance, trivializing
    non-inferiority). Prediction cache for the 59,790-image pass: S3
    `preds/913c44823e78_estsvk_all_raw.csv`; per-pair table `results/fingerprint_raw.csv`.
