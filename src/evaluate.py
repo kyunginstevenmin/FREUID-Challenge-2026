@@ -7,6 +7,10 @@ Protocols:
             same pandas seeds, independent of --seed/--backbone (the ablation's
             row-identity guarantee). MUST stay in lockstep with train.py's branch.
   external  the full EST+SVK IDNet pool (eval_external.py's set).
+  genval    the unseen-type generalization-val pool (EVALUATION.md §2.1):
+            id-fraud-detection/dataset_final/test.csv (override: $GENVAL_CSV).
+            Adds the per-type table and the two-level macro (types within source,
+            then sources) with a type-stratified bootstrap CI.
 
 Readouts:
   raw       single-scale image logit at the checkpoint's training res.
@@ -70,7 +74,48 @@ def external_df() -> pd.DataFrame:
     return idn[idn.type.isin(["EST_scanned", "SVK_scanned"])].reset_index(drop=True)
 
 
-PROTOCOLS = {"tier1": tier1_df, "external": external_df}
+def genval_df() -> pd.DataFrame:
+    """dataset_final/test.csv (id,image_path,label,type,source); image_path is relative
+    to the id-fraud-detection repo root, i.e. the CSV's grandparent dir."""
+    csv = os.environ.get("GENVAL_CSV", os.path.join(ROOT, "..", "..", "id-fraud-detection",
+                                                    "dataset_final", "test.csv"))
+    df = pd.read_csv(csv)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(csv)))
+    df["path"] = [os.path.join(root, ip) for ip in df.image_path]
+    return df.reset_index(drop=True)
+
+
+PROTOCOLS = {"tier1": tier1_df, "external": external_df, "genval": genval_df}
+
+
+def macro_scores(y, scores, types, sources):
+    """Two-level macro (EVALUATION.md gauge-reporting rule): FREUID per type; per source =
+    mean over its types; returns (per_type, per_source, macro_type, macro_source).
+    Every type must contain both classes (freuid_score asserts)."""
+    df = pd.DataFrame({"y": y, "s": scores, "type": types, "source": sources})
+    per_type = {t: freuid_score(g.y.values, g.s.values)[0] for t, g in df.groupby("type")}
+    per_source = {src: float(np.mean([per_type[t] for t in g.type.unique()]))
+                  for src, g in df.groupby("source")}
+    return (per_type, per_source,
+            float(np.mean(list(per_type.values()))), float(np.mean(list(per_source.values()))))
+
+
+def bootstrap_macro_ci(y, scores, types, sources, n_boot=1000, seed=0, alpha=0.05):
+    """Percentile CI for (macro_type, macro_source): resample rows within each type so
+    every type keeps its own n (a pooled resample would let big types eat small ones)."""
+    y = np.asarray(y); scores = np.asarray(scores)
+    types = np.asarray(types); sources = np.asarray(sources)
+    groups = [np.flatnonzero(types == t) for t in np.unique(types)]
+    rng = np.random.default_rng(seed)
+    stats = []
+    while len(stats) < n_boot:
+        idx = np.concatenate([g[rng.integers(0, len(g), len(g))] for g in groups])
+        try:
+            stats.append(macro_scores(y[idx], scores[idx], types[idx], sources[idx])[2:])
+        except AssertionError:      # a resample lost a class inside some type; redraw
+            continue
+    stats = np.asarray(stats)       # (n_boot, 2)
+    return np.quantile(stats, alpha / 2, axis=0), np.quantile(stats, 1 - alpha / 2, axis=0)
 
 
 def bootstrap_ci(y, scores, n_boot: int = 1000, seed: int = 0, alpha: float = 0.05):
@@ -188,6 +233,24 @@ def main():
         line += f"  FREUID 95% CI [{lo[0]:.4f}, {hi[0]:.4f}] (boot={args.boot})"
         row.update({"freuid_ci_lo": lo[0], "freuid_ci_hi": hi[0], "n_boot": args.boot})
     print(line, flush=True)
+
+    if {"type", "source"} <= set(df.columns):
+        per_type, per_source, mt, ms = macro_scores(y, scores, df.type.values, df.source.values)
+        n_type = df.type.value_counts()
+        for src, g in df.groupby("source"):
+            print(f"  [{src}] macro={per_source[src]:.4f}", flush=True)
+            for t in sorted(g.type.unique()):
+                print(f"    {t:<28} n={n_type[t]:>6} FREUID={per_type[t]:.4f}", flush=True)
+        mline = f"  macro over types={mt:.4f}  macro over sources={ms:.4f}"
+        row.update({"freuid_macro_type": mt, "freuid_macro_source": ms})
+        if args.boot:
+            lo, hi = bootstrap_macro_ci(y, scores, df.type.values, df.source.values,
+                                        n_boot=args.boot)
+            mline += (f"  95% CI type [{lo[0]:.4f}, {hi[0]:.4f}]"
+                      f" source [{lo[1]:.4f}, {hi[1]:.4f}]")
+            row.update({"macro_type_ci_lo": lo[0], "macro_type_ci_hi": hi[0],
+                        "macro_source_ci_lo": lo[1], "macro_source_ci_hi": hi[1]})
+        print(mline, flush=True)
 
     os.makedirs(os.path.dirname(RESULTS_CSV), exist_ok=True)
     pd.DataFrame([row]).to_csv(RESULTS_CSV, mode="a", index=False,
