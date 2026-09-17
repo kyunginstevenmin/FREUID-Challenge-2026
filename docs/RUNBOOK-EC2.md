@@ -13,6 +13,22 @@ export REGION=<region>                          # keep bucket and instance in th
 export KEYPAIR=<your-ec2-keypair>
 ```
 
+## 0a. Step 0 of the own-run plan: REF on gen-val (2026-09-17)
+
+One script, no matrix: launch a g5.4xlarge (§1–2; instance role needs S3 read
+on **both** `pscc-net-training` and `freuid-ablation-…`), then inside tmux:
+
+```bash
+curl -sO https://raw.githubusercontent.com/kyunginstevenmin/FREUID-Challenge-2026/feat/attnpool-head/scripts/ref_genval_ec2.sh
+bash ref_genval_ec2.sh          # clone both repos, pull ~33 GB, evaluate raw + deploy, sync preds/results
+```
+
+≈ 10 min pull + 30–40 min GPU. Output: `results/eval_results.csv` rows with
+`freuid_macro_type` / `freuid_macro_source` + CIs, the per-source block in
+`results/ref_genval.log`, prediction cache in `preds/`. Terminate after the
+sync (§6). Then record REF's table in id-fraud-detection EVALUATION.md §6.
+Prereq: `git push fork feat/attnpool-head` (the script clones from the fork).
+
 ## 0. One-time local prep
 
 ```bash
