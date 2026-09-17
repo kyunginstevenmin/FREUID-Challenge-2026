@@ -1,5 +1,7 @@
 # Task list — backbone ablation prep
 
+> **Active plan (2026-09-17): [plans/2026-09-17-first-own-run-plan.md](plans/2026-09-17-first-own-run-plan.md)** — first own model under EVALUATION.md. This file remains the parked ablation checklist.
+
 > **⚠ PARKED 2026-09-12.** The program is paused, not deleted: the fingerprint
 > session (docs/DATA.md, open-question 0) proved the as-shipped Zenodo IDNet
 > images are not what REF trained on, breaking the B-vs-REF anchor. New active
