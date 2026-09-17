@@ -14,3 +14,6 @@ report/*.blg
 report/*.fls
 report/*.fdb_latexmk
 report/*.toc
+
+# prediction caches live in S3 ($BUCKET/preds); 2.6 MB each
+preds/

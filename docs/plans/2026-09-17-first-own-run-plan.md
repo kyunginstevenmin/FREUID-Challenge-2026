@@ -27,7 +27,12 @@ command).
 
 Steps 0 and 1 are independent — run 0 on EC2 while 1 is written locally.
 
-## Step 0 — REF baseline on gen-val (no submission)
+## Step 0 — REF baseline on gen-val (no submission) — DONE 2026-09-17
+
+Result in id-fraud-detection EVALUATION.md §6 "Baselines": deploy source-macro
+0.4389 [0.4014, 0.4730]; unseen-only (3 sources) 0.5853. Numbers to beat.
+Run log: `results/ref_genval.log`; g5.2xlarge on-demand (no spot capacity),
+~45 min GPU. Lesson: the DL AMI's torch lives in /opt/pytorch (script fixed).
 
 Why: the number to beat locally (CLAUDE.md HIGH #6), the first real exercise of
 `evaluate.py --protocol genval` (path resolution, letterbox, deploy readout,

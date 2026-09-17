@@ -1,0 +1,48 @@
+/opt/pytorch/lib/python3.13/site-packages/torch/cuda/__init__.py:65: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+  448x728: 21900 imgs in 901s
+cached -> /home/ubuntu/FREUID-Challenge-2026/preds/913c44823e78_genval_raw.csv
+[cv5_full_ep2.pt sha=913c44823e78 genval/raw] n=21900 FREUID=0.2075 AuDET=0.0274 APCER@1%BPCER=0.3313  FREUID 95% CI [0.1950, 0.2250] (boot=1000)
+  [fantasyid] macro=0.7097
+    portugal                     n=   339 FREUID=0.4942
+    turkiye                      n=   327 FREUID=0.9252
+  [freuid] macro=0.0000
+    EGYPT/DL                     n= 15867 FREUID=0.0000
+  [idnet] macro=0.4875
+    idnet_az                     n=  1000 FREUID=0.5624
+    idnet_ca                     n=  1000 FREUID=0.6127
+    idnet_esp                    n=  1000 FREUID=0.2669
+    idnet_fin                    n=  1000 FREUID=0.3569
+    idnet_rus                    n=  1000 FREUID=0.6386
+  [sidt] macro=0.6673
+    esp_id                       n=   132 FREUID=0.7919
+    fin_id                       n=   116 FREUID=0.7141
+    rus_internalpassport         n=   119 FREUID=0.4959
+  macro over types=0.5326  macro over sources=0.4661  95% CI type [0.4885, 0.5758] source [0.4163, 0.5047]
+appended -> /home/ubuntu/FREUID-Challenge-2026/results/eval_results.csv
+/opt/pytorch/lib/python3.13/site-packages/torch/cuda/__init__.py:65: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  378x616: 21900 imgs in 619s
+  392x644: 21900 imgs in 678s
+  448x728: 21900 imgs in 890s
+  490x798: 21900 imgs in 1076s
+cached -> /home/ubuntu/FREUID-Challenge-2026/preds/913c44823e78_genval_deploy.csv
+[cv5_full_ep2.pt sha=913c44823e78 genval/deploy] n=21900 FREUID=0.1952 AuDET=0.0292 APCER@1%BPCER=0.3128  FREUID 95% CI [0.1878, 0.2047] (boot=1000)
+  [fantasyid] macro=0.6458
+    portugal                     n=   339 FREUID=0.5048
+    turkiye                      n=   327 FREUID=0.7869
+  [freuid] macro=0.0000
+    EGYPT/DL                     n= 15867 FREUID=0.0000
+  [idnet] macro=0.4897
+    idnet_az                     n=  1000 FREUID=0.6396
+    idnet_ca                     n=  1000 FREUID=0.5598
+    idnet_esp                    n=  1000 FREUID=0.2512
+    idnet_fin                    n=  1000 FREUID=0.3232
+    idnet_rus                    n=  1000 FREUID=0.6747
+  [sidt] macro=0.6203
+    esp_id                       n=   132 FREUID=0.7907
+    fin_id                       n=   116 FREUID=0.7096
+    rus_internalpassport         n=   119 FREUID=0.3605
+  macro over types=0.5092  macro over sources=0.4389  95% CI type [0.4711, 0.5454] source [0.4014, 0.4730]
+appended -> /home/ubuntu/FREUID-Challenge-2026/results/eval_results.csv
