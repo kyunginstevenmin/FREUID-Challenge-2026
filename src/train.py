@@ -41,12 +41,18 @@ def load_image(source, idv, path):
 
 
 class TrainDS(Dataset):
-    """attacks='self_blend' (default, cv1/cv2 recipe): untargeted generic self-blend only.
+    """Synthetic-fraud injection: with prob `sbi`, a genuine row is converted to fraud on the
+    fly (label -> 1). sbi=0 (default since 2026-09-17, id-fraud-detection/ARCHITECTURE.md
+    open decision 5) = OFF; the winner's recipe is sbi=0.25, kept as an ablation arm.
+    attacks='self_blend': untargeted generic self-blend only (cv1/cv2 recipe).
     attacks='full': the annotation-driven suite (region_swap/text_field_edit/erase_retype,
-    placed via annotations/type_fields.json) that cue2 used -- same fraud-generation realism,
-    layered onto the SAME otherwise-unchanged FREUID-only recipe (one lever at a time)."""
+    placed via annotations/type_fields.json) that cue2/cv5 used.
+    Randomness: one numpy Generator per DataLoader worker, seeded from torch's worker seed
+    (`_worker_init`), so a run seed reproduces the same synthetic fraud (given the same
+    --workers); the num_workers=0 path seeds lazily from torch.initial_seed()."""
     def __init__(self, ids, labels, types, H, W, groups=DEFAULT_GROUPS, sbi=0.0, attacks="self_blend",
                  sources=None, paths=None):
+        self.rng = None                                   # set per worker by _worker_init
         self.ids = ids; self.y = np.asarray(labels, np.float32); self.types = np.asarray(types)
         self.src = np.asarray(sources) if sources is not None else np.full(len(ids), "freuid")
         self.path = np.asarray(paths) if paths is not None else np.full(len(ids), "")
@@ -89,7 +95,9 @@ class TrainDS(Dataset):
         return fake
 
     def __getitem__(self, i):
-        rng = np.random.default_rng()
+        if self.rng is None:                              # num_workers=0 (tests, --limit runs)
+            self.rng = np.random.default_rng(torch.initial_seed())
+        rng = self.rng
         # augment on full-res then letterbox (GPU-bound anyway; full-res aug is more
         # accurate -- resize-first measured worse: held-out Mauritius 0.0038 -> 0.0136).
         img = load_image(self.src[i], self.ids[i], self.path[i]); y = float(self.y[i])
@@ -101,6 +109,13 @@ class TrainDS(Dataset):
             img = self.tf(image=img)["image"]
         img = letterbox(img, self.H, self.W)
         return to_tensor_norm(img), y
+
+
+def _worker_init(_worker_id):
+    """Seed the worker's TrainDS.rng from torch's per-worker seed (derived from the run seed,
+    fresh per DataLoader iterator; persistent workers keep advancing the same stream)."""
+    ds = torch.utils.data.get_worker_info().dataset
+    ds.rng = np.random.default_rng(torch.initial_seed())
 
 
 class ValDS(Dataset):
@@ -180,9 +195,13 @@ def build_parser():
     ap.add_argument("--res", type=str, default="322x518")
     ap.add_argument("--aug", type=str, default="core",
                     help="'core', 'none', or comma list: degrade,color,noise,geometry,moire,dropout")
-    ap.add_argument("--sbi", type=float, default=0.25)
+    ap.add_argument("--sbi", type=float, default=0.0,
+                    help="prob. a genuine train row is converted to synthetic fraud per epoch. "
+                         "0 = off (default, decided 2026-09-17); winner's recipe = 0.25 with "
+                         "--attacks full (kept as an ablation arm)")
     ap.add_argument("--attacks", type=str, default="self_blend", choices=["self_blend", "full"],
-                    help="self_blend=cv1/cv2 recipe; full=cue2-style annotation-driven suite")
+                    help="only used when --sbi > 0. self_blend=cv1/cv2 recipe; "
+                         "full=cue2-style annotation-driven suite")
     ap.add_argument("--lora_r", type=int, default=16)
     ap.add_argument("--seed", type=int, default=42,
                     help="seeds python/numpy/torch (LoRA-A + head init, data order, aug draws); "
@@ -354,7 +373,8 @@ def main():
                  sources=tr.source.tolist(), paths=tr.path.tolist())
     vds = ValDS(va.id.tolist(), va.label.values, H, W)
     tdl = DataLoader(tds, batch_size=args.bs, shuffle=True, num_workers=args.workers,
-                     pin_memory=True, drop_last=True, persistent_workers=True)
+                     pin_memory=True, drop_last=True, persistent_workers=True,
+                     worker_init_fn=_worker_init)
     vdl = DataLoader(vds, batch_size=args.eval_bs, shuffle=False, num_workers=8, pin_memory=True)
     hvdl = (DataLoader(HardValDS(va.id.tolist(), va.label.values, H, W),
                        batch_size=args.eval_bs, shuffle=False, num_workers=8, pin_memory=True)
