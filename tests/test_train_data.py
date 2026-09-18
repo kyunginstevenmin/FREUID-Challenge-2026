@@ -130,3 +130,15 @@ def test_frozen_epoch_is_earliest_inside_best_ci():
     assert list(t.epoch) == [0, 1, 2, 3] and (t.ci_lo <= t.macro_source).all()
     assert t.loc[t.epoch == 0, "macro_source"].item() > t.ci_hi[1:].max()   # ep0 clearly worse
     assert pick_frozen_epoch(t) == 1                                          # not the argmax epoch
+
+
+def test_one_se_band_is_narrower_than_ci95():
+    from freeze_epoch import tie_threshold
+    t = pd.DataFrame({"epoch": [0, 1, 2], "macro_source": [0.50, 0.40, 0.41],
+                      "ci_lo": [0.45, 0.36, 0.37], "ci_hi": [0.55, 0.44, 0.45]})
+    best = t.loc[t.macro_source.idxmin()]
+    assert tie_threshold(best, "1se") < tie_threshold(best, "ci95") == 0.44
+    assert abs(tie_threshold(best, "1se") - (0.40 + 0.08 / 3.92)) < 1e-12
+    assert pick_frozen_epoch(t, "ci95") == 1 and pick_frozen_epoch(t, "1se") == 1   # ep2 (0.41) tied under ci95 only if it were earlier
+    t.loc[2, "epoch"], t.loc[1, "epoch"] = 1, 2                                    # swap order: the 0.41 epoch is now earlier
+    assert pick_frozen_epoch(t, "ci95") == 1 and pick_frozen_epoch(t, "1se") == 2  # 1se excludes it (0.41 > 0.4204)
