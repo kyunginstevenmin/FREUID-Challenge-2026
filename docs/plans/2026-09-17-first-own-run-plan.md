@@ -168,6 +168,7 @@ resume. Then bake the AMI (runbook §3).
 | backbone B | `backbone: vit_base_patch14_reg4_dinov2` | CI-overlap → keep the cheaper (§3.2) | BACKBONE_ABLATION.md pattern |
 | retrain to frozen count | `epochs: k` (k = frozen epoch) | annealed epoch-k beats the mid-schedule epoch-k checkpoint | EVALUATION.md §3.1 alt (a) |
 | average tied checkpoints | uniform average of the CI-tied lean ckpts (script TBD, ~20 lines) | soup beats the default pick | EVALUATION.md §3.1 alt (b) |
+| LP-FT (linear probe, then fine-tune) | train the head on frozen DINOv2 features first (LoRA off, ~1 short epoch), then the normal recipe from that head; new `--lp_epochs N` flag | Kumar et al. 2022: a random head distorts pretrained features early under a large shift — our exact setup; gain should show on the print-capture sources | ARCHITECTURE.md open decision 6 |
 
 Order: run the one the control-arm failure-mode table points at first. Each
 arm: 1 seed (decided) → directional; add a second seed only if the CIs are
