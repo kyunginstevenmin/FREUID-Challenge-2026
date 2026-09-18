@@ -166,6 +166,8 @@ resume. Then bake the AMI (runbook §3).
 | scan-sim IDNet (§2.4) | swap IDNet_v2 pixels for the transformed copies (`scripts/IDNet_v2/scan_sim.py`, offline, seeded, hash-pinned) | gain on sidt/fantasyid, idnet may drop | EVALUATION.md §2.4 |
 | synthetic fraud injection | `sbi: 0.25, attacks: full` | tests whether the winner's lever pays with real multi-source fraud | ARCHITECTURE.md #5 |
 | backbone B | `backbone: vit_base_patch14_reg4_dinov2` | CI-overlap → keep the cheaper (§3.2) | BACKBONE_ABLATION.md pattern |
+| retrain to frozen count | `epochs: k` (k = frozen epoch) | annealed epoch-k beats the mid-schedule epoch-k checkpoint | EVALUATION.md §3.1 alt (a) |
+| average tied checkpoints | uniform average of the CI-tied lean ckpts (script TBD, ~20 lines) | soup beats the default pick | EVALUATION.md §3.1 alt (b) |
 
 Order: run the one the control-arm failure-mode table points at first. Each
 arm: 1 seed (decided) → directional; add a second seed only if the CIs are
