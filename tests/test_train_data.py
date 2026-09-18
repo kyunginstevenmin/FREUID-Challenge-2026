@@ -84,3 +84,49 @@ def test_load_image_prefers_path(split_dir):
     assert img.shape == (32, 48, 3)
     x, y = ValDS(tr.id.tolist(), tr.label.values, 16, 24, paths=tr.path.tolist())[0]
     assert tuple(x.shape) == (3, 16, 24) and y == float(tr.label[0])
+
+
+# ---- step 2: gen-val selection inputs ----
+import torch
+from train import genval_metrics, lean_state
+
+
+def test_genval_metrics_matches_hand_computed_macros():
+    # source A: type a1 perfect (0), a2 inverted (1); source B: b1 perfect -> macro_type 1/3, macro_source 1/4
+    gen = pd.DataFrame({"label": [0, 0, 1, 1, 0, 1, 0, 0, 1, 1],
+                        "type": ["a1"] * 4 + ["a2"] * 2 + ["b1"] * 4,
+                        "source": ["A"] * 6 + ["B"] * 4})
+    m = genval_metrics(gen, np.array([.1, .2, .8, .9, .9, .1, .1, .2, .8, .9]))
+    assert m["per_source"] == {"A": 0.5, "B": 0.0} and m["macro_source"] == 0.25
+    assert abs(m["macro_type"] - 1 / 3) < 1e-12
+    assert 0.0 < m["freuid"] < 1.0                         # pooled is a different number
+
+
+def test_lean_state_keeps_trainable_and_head_only():
+    class M(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.backbone = torch.nn.Linear(2, 2); self.backbone.weight.requires_grad_(False)
+            self.backbone.bias.requires_grad_(False)
+            self.head = torch.nn.BatchNorm1d(2)             # has running-stat buffers
+            self.lora = torch.nn.Linear(2, 2)              # trainable, outside head
+    keys = set(lean_state(M()))
+    assert "backbone.weight" not in keys and "backbone.bias" not in keys
+    assert {"lora.weight", "lora.bias", "head.weight", "head.bias", "head.running_mean"} <= keys
+
+
+# ---- step 2: offline epoch freeze (tie rule) ----
+from freeze_epoch import epoch_table, pick_frozen_epoch
+
+
+def test_frozen_epoch_is_earliest_inside_best_ci():
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 600)
+    gen = pd.DataFrame({"label": y, "type": np.repeat(["a1", "a2", "b1"], 200),
+                        "source": np.repeat(["A", "A", "B"], 200)})
+    sep = {0: 0.3, 1: 1.2, 2: 1.25, 3: 1.22}        # ep1..3 are indistinguishable, ep0 is bad
+    preds = {ep: rng.normal(loc=y * s, scale=1.0) for ep, s in sep.items()}
+    t = epoch_table(gen, preds, n_boot=100)
+    assert list(t.epoch) == [0, 1, 2, 3] and (t.ci_lo <= t.macro_source).all()
+    assert t.loc[t.epoch == 0, "macro_source"].item() > t.ci_hi[1:].max()   # ep0 clearly worse
+    assert pick_frozen_epoch(t) == 1                                          # not the argmax epoch

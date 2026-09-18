@@ -21,6 +21,7 @@ from augment import (build_transform, self_blend, region_swap, text_field_edit, 
                      load_field_annotations, DEFAULT_GROUPS)
 from model import FreuidModel
 from freuid_metric import freuid_score
+from evaluate import macro_scores
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -85,6 +86,24 @@ def build_frames_split(args):
         va = _sample_per_group(va, ["source", "label"], max(1, args.limit // (2 * va.source.nunique())))
         gen = _sample_per_group(gen, ["type", "label"], max(1, args.limit // (2 * gen.type.nunique())))
     return tr, va, gen, os.path.basename(split_dir)
+
+
+def genval_metrics(gen, preds):
+    """One epoch's gen-val report (EVALUATION.md §1): pooled FREUID + per-type / per-source
+    FREUID + macro over types + macro over sources (the selection number, §3.1). Pure."""
+    y = gen.label.values
+    f, a, apc = freuid_score(y, preds)
+    per_type, per_source, mt, ms = macro_scores(y, preds, gen.type.values, gen.source.values)
+    return {"freuid": f, "audet": a, "apcer": apc, "per_type": per_type,
+            "per_source": per_source, "macro_type": mt, "macro_source": ms}
+
+
+def lean_state(model):
+    """Trained tensors only (LoRA A/B + head, incl. head buffers): the 'model_lean' layout
+    evaluate.py loads with strict=False. ~27 MB vs ~1.2 GB for the full state."""
+    trainable = {n for n, p in model.named_parameters() if p.requires_grad}
+    return {k: v.detach().cpu() for k, v in model.state_dict().items()
+            if k in trainable or k.startswith("head.")}
 
 
 class TrainDS(Dataset):
@@ -511,14 +530,21 @@ def main():
         hf = ha = hap = None
         if args.hardval:
             hf, ha, hap, _ = evaluate(model, hvdl)
-        idf = ida = idapc = None
+        idf = ida = idapc = None; gm = None
         if idl is not None:
-            idf, ida, idapc, _ = evaluate(model, idl)
+            idf, ida, idapc, gp = evaluate(model, idl)
+            if args.split_dir:                # step 2: per-source report + offline tie-rule inputs
+                gm = genval_metrics(gen, gp)
+                np.save(os.path.join(OOF_DIR, f"genvalpred_{args.tag}_{vname}_ep{ep}.npy"), gp)
+                gen[["id", "label", "type", "source"]].to_csv(
+                    os.path.join(OOF_DIR, f"genval_{args.tag}_{vname}.csv"), index=False)
+                torch.save({"model_lean": lean_state(model), "args": vars(args), "ep": ep},
+                           os.path.join(CKPT_DIR, f"{args.tag}_{vname}_ep{ep}_lean.pt"))
         torch.cuda.empty_cache()
         # SELECT ON HELDOUT-IDNet: the in-domain FREUID val (clean AND corrupted "hard" proxy)
         # proved unreliable for RANKING checkpoints (2026-07-08: fold2's best-ever local score
         # scored WORSE on the real LB than fold1's mediocre one). IDNet has zero leakage risk.
-        sel_map = {"idnet": idf, "genval": idf, "hard": hf, "clean": f}
+        sel_map = {"idnet": idf, "genval": (gm["macro_source"] if gm else idf), "hard": hf, "clean": f}
         sel = sel_map[args.select_on] if sel_map[args.select_on] is not None else f
         msg = f"== ep{ep} clean FREUID={f:.4f}(AUC={1-a:.4f},APCER@1%={apc:.4f})"
         if args.hardval:
@@ -527,6 +553,10 @@ def main():
             msg += f" | {gname} FREUID={idf:.4f}(AUC={1-ida:.4f},APCER@1%={idapc:.4f})"
         msg += f" | train={train_t:.0f}s({tput:.1f}img/s)"
         print(msg, flush=True)
+        if gm is not None:
+            print("   GEN-VAL " + "  ".join(f"{k}={v:.4f}" for k, v in sorted(gm["per_source"].items()))
+                  + f"  | macro_type={gm['macro_type']:.4f}  macro_source={gm['macro_source']:.4f}"
+                  + ("  <- selection" if args.select_on == "genval" else ""), flush=True)
         if wb is not None:
             log = {"train/loss": run / max(1, it + 1), "train/sec": train_t,
                    "train/img_per_s": tput, "lr": sched.get_last_lr()[0],
@@ -535,11 +565,17 @@ def main():
                 log.update({"hard/freuid": hf, "hard/audet": ha, "hard/apcer": hap})
             if idf is not None:
                 log.update({f"{gkey}/freuid": idf, f"{gkey}/audet": ida, f"{gkey}/apcer": idapc})
+            if gm is not None:
+                log.update({f"genval/{k}": v for k, v in gm["per_source"].items()})
+                log.update({f"genval/type/{k}": v for k, v in gm["per_type"].items()})
+                log.update({"genval/macro_type": gm["macro_type"], "genval/macro_source": gm["macro_source"]})
             wb.log(log, step=ep)
         save_state(ep)
         if sel < best["freuid"]:
             best = {"freuid": float(sel), "clean": float(f), "hard": (float(hf) if hf is not None else None),
                     "idnet": (float(idf) if idf is not None else None),
+                    "macro_source": (float(gm["macro_source"]) if gm else None),
+                    "macro_type": (float(gm["macro_type"]) if gm else None),
                     "audet": float(a), "apcer": float(apc), "epoch": ep}
             torch.save({"model": model.state_dict(), "args": vars(args), "val": best}, best_path)
             np.save(os.path.join(OOF_DIR, f"valpred_{args.tag}_{vname}.npy"), p)

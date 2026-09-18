@@ -88,7 +88,9 @@ Practice note (SWE roadmap: config-driven runs, testing): the loading branch and
 its fixture test are a good Kyungin rep; Claude adds the boundary asserts and
 reviews.
 
-## Step 2 — gen-val selection inside the run
+## Step 2 — gen-val selection inside the run — DONE 2026-09-17
+
+`genval_metrics()` per epoch (pooled + per-type + per-source + both macros), printed as a GEN-VAL line and logged to W&B (`genval/<source>`, `genval/type/<t>`, `genval/macro_*`); `--select_on genval` = source-macro; per-epoch dumps `oof/genvalpred_<tag>_<vname>_ep<k>.npy` + `oof/genval_<tag>_<vname>.csv`; per-epoch lean checkpoints `checkpoints/<tag>_<vname>_ep<k>_lean.pt` (`lean_state()`, the layout evaluate.py loads). Tie rule offline: `src/freeze_epoch.py --tag ...` prints the per-epoch CI table and the frozen epoch. Tests: 3 more in tests/test_train_data.py.
 
 - Each epoch: evaluate on `gen` (raw readout, same `IDNetEvalDS` — it only
   needs `path,label`), then `from evaluate import macro_scores` →
