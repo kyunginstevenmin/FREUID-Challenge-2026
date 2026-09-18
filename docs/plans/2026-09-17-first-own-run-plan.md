@@ -51,7 +51,9 @@ known; the print-capture sources are the informative rows).
 
 Cost: 21,900 images × (1 raw + 4 TTA scales) ≈ 30–40 min on an A10G.
 
-## Step 1 — `train.py` reads dataset_final (the engineering step)
+## Step 1 — `train.py` reads dataset_final (the engineering step) — DONE 2026-09-17
+
+Implemented as `--split_dir` / `--data_root` + `build_frames_split()` (train.py), path-aware `ValDS`, `load_image` prefers `path`; legacy flags rejected; `--hardval` forced off; `--limit` stratified by (source,label) / (type,label). Real dataset_final: 63,382 / 15,961 / 21,900 rows in 0.3 s. Tests: tests/test_train_data.py (6). `--select_on genval` exists but is the POOLED gen-val score until step 2.
 
 Current state: `main()` reads `splits/folds.csv` (FREUID only), bolts IDNet on
 via `--idnet_countries/--lim_idn/...` from `external/idnet_cropped_index.csv`,
@@ -67,7 +69,7 @@ Changes (keep the legacy branch intact — the parked ablation configs and
 `test_resolve_args` still exercise it):
 
 - `--split_dir PATH` (dir holding train/val/test.csv) and `--data_root PATH`
-  (defaults to split_dir's grandparent). When `--split_dir` is set:
+  (defaults to split_dir's parent). When `--split_dir` is set:
   - `tr` = train.csv, `va` = val.csv, `gen` = test.csv, each with
     `path = data_root/image_path`; the `--full_data/--holdout/--fold/--idnet_*`
     flags are rejected (`validate_cfg`), not silently ignored.

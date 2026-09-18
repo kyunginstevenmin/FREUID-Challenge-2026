@@ -36,8 +36,55 @@ def parse_groups(s):
 
 
 def load_image(source, idv, path):
-    """Dispatch FREUID (id -> train_path) vs IDNet (absolute path already in the index)."""
-    return load_rgb(train_path(idv)) if source == "freuid" else load_rgb(path)
+    """`path` wins when present (dataset_final rows, IDNet index rows); legacy FREUID fold rows
+    carry path '' and are located by id in the Kaggle dir. `source` kept for call-site compat."""
+    return load_rgb(path) if path else load_rgb(train_path(idv))
+
+
+# ---- dataset_final contract (--split_dir; id-fraud-detection/dataset_final/readme.md) ----
+SPLIT_COLS = ["id", "image_path", "label", "type", "source"]
+LEGACY_DATA_FLAGS = ("full_data", "holdout", "fold", "idnet_countries", "heldout_idnet",
+                     "idn_val_from_unused", "lim_idn", "idn_val_n")
+
+
+def _sample_per_group(df, keys, n, seed=0):
+    """At most n rows per group (all rows of smaller groups); deterministic."""
+    return pd.concat([g.sample(min(len(g), n), random_state=seed) for _, g in df.groupby(keys)],
+                     ignore_index=True)
+
+
+def load_split(split_dir, data_root, name):
+    df = pd.read_csv(os.path.join(split_dir, f"{name}.csv"))
+    missing = [c for c in SPLIT_COLS if c not in df.columns]
+    assert not missing, f"{name}.csv: missing columns {missing} (expected {SPLIT_COLS})"
+    assert set(df.label.unique()) <= {0, 1}, f"{name}.csv: labels must be 0/1"
+    df["path"] = [os.path.join(data_root, ip) for ip in df.image_path]
+    return df[["id", "label", "type", "source", "path"]]
+
+
+def build_frames_split(args):
+    """--split_dir mode: tr = train.csv, va = val.csv (in-dist; divergence alarm only),
+    gen = test.csv (the gen-val gauge, EVALUATION.md §2.1). Returns (tr, va, gen, vname).
+    Legacy data flags (FREUID folds, IDNet index) are an error here, never a silent no-op."""
+    defaults = vars(build_parser().parse_args([]))
+    bad = [k for k in LEGACY_DATA_FLAGS if getattr(args, k) != defaults[k]]
+    if bad:
+        raise SystemExit(f"--split_dir is exclusive with the legacy data flags; drop: {bad}")
+    split_dir = os.path.abspath(args.split_dir)
+    data_root = (os.path.abspath(args.data_root) if args.data_root
+                 else os.path.dirname(split_dir))                    # <root>/dataset_final -> <root>
+    tr, va, gen = (load_split(split_dir, data_root, n) for n in ("train", "val", "test"))
+    ids = [set(d.id) for d in (tr, va, gen)]
+    assert not (ids[0] & ids[1] or ids[0] & ids[2] or ids[1] & ids[2]), "id overlap across splits"
+    assert not (set(tr.type) & set(gen.type)), "test.csv types must be unseen in train.csv"
+    for d, n in ((tr, "train"), (va, "val"), (gen, "test")):
+        assert os.path.exists(d.path.iloc[0]), \
+            f"{n}.csv: first image missing at {d.path.iloc[0]} -- check --data_root"
+    if args.limit:   # smoke runs: keep every source (and every gen-val type, both classes)
+        tr = _sample_per_group(tr, ["source", "label"], max(1, args.limit // (2 * tr.source.nunique())))
+        va = _sample_per_group(va, ["source", "label"], max(1, args.limit // (2 * va.source.nunique())))
+        gen = _sample_per_group(gen, ["type", "label"], max(1, args.limit // (2 * gen.type.nunique())))
+    return tr, va, gen, os.path.basename(split_dir)
 
 
 class TrainDS(Dataset):
@@ -119,13 +166,14 @@ def _worker_init(_worker_id):
 
 
 class ValDS(Dataset):
-    def __init__(self, ids, labels, H, W):
+    def __init__(self, ids, labels, H, W, paths=None):
         self.ids = ids; self.y = np.asarray(labels, np.float32); self.H, self.W = H, W
+        self.paths = list(paths) if paths is not None else [""] * len(ids)
 
     def __len__(self): return len(self.ids)
 
     def __getitem__(self, i):
-        img = letterbox(load_rgb(train_path(self.ids[i])), self.H, self.W)
+        img = letterbox(load_image("", self.ids[i], self.paths[i]), self.H, self.W)
         return to_tensor_norm(img), float(self.y[i])
 
 
@@ -180,6 +228,12 @@ def build_parser():
     ap.add_argument("--config", type=str, default=None,
                     help="YAML run config; precedence: argparse defaults < YAML < flags "
                          "explicitly typed on the CLI (detected via a SUPPRESS-defaults twin parse)")
+    ap.add_argument("--split_dir", type=str, default="",
+                    help="dataset_final dir holding train/val/test.csv (id,image_path,label,type,"
+                         "source). Sets tr=train.csv, va=val.csv (divergence only), gen=test.csv "
+                         "(gen-val gauge); the legacy FREUID-fold / IDNet-index flags are rejected")
+    ap.add_argument("--data_root", type=str, default="",
+                    help="root that image_path is relative to (default: split_dir's parent)")
     ap.add_argument("--holdout", type=str, default=None)
     ap.add_argument("--fold", type=int, default=None)
     ap.add_argument("--full_data", action="store_true",
@@ -231,10 +285,11 @@ def build_parser():
                          "with training; used when --heldout_idnet '')")
     ap.add_argument("--lim_idn", type=int, default=56000, help="cap on IDNet training rows (balanced by label)")
     ap.add_argument("--idn_val_n", type=int, default=4000, help="HELDOUT-IDNet eval sample size")
-    ap.add_argument("--select_on", type=str, default="idnet", choices=["idnet", "hard", "clean"],
+    ap.add_argument("--select_on", type=str, default="idnet", choices=["idnet", "hard", "clean", "genval"],
                     help="checkpoint-selection criterion. idnet = the ONLY leak-free signal we have "
                          "(in-domain FREUID val proved unreliable for ranking checkpoints, even the "
-                         "'hard'/corrupted proxy -- see ROADMAP 2026-07-08 entries)")
+                         "'hard'/corrupted proxy -- see ROADMAP 2026-07-08 entries). genval = the "
+                         "--split_dir gauge (pooled for now; source-macro lands with step 2)")
     ap.add_argument("--wandb", action="store_true",
                     help="log this run to Weights & Biases (config + per-epoch metrics). Off by "
                          "default so smoke/debug runs stay out of the project; run id is "
@@ -312,52 +367,58 @@ def main():
     torch.manual_seed(args.seed); torch.cuda.manual_seed_all(args.seed)
     H, W = (int(v) for v in args.res.lower().split("x"))
 
-    df = pd.read_csv(os.path.join(ROOT, "splits", "folds.csv"))
-    if args.full_data:
-        vname = "full"
-        tr = df.copy()
-        va = df.groupby(["type", "label"], group_keys=False).apply(
-            lambda g: g.sample(min(len(g), 200), random_state=0))  # informational only, IN training
-    elif args.holdout:
-        val_mask = df.type == args.holdout; vname = "hold_" + args.holdout.replace("/", "_")
-        tr, va = df[~val_mask].copy(), df[val_mask].copy()
-    elif args.fold is not None:
-        val_mask = df.strat_fold == args.fold; vname = f"fold{args.fold}"
-        tr, va = df[~val_mask].copy(), df[val_mask].copy()
+    if args.split_dir:
+        tr, va, gen, vname = build_frames_split(args)
+        args.hardval = 0                      # corrupted-val public-LB proxy: outside the protocol
+        idn_val = gen                         # gen-val rides the held-out eval slot
     else:
-        raise SystemExit("specify --holdout, --fold, or --full_data")
-    if args.limit:
-        tr = tr.sample(args.limit, random_state=0); va = va.sample(min(args.limit, len(va)), random_state=0)
-    tr["source"] = "freuid"; tr["path"] = ""
-
-    idn_val = None
-    if args.idnet_countries:
-        idn = pd.read_csv(os.path.join(ROOT, "external", "idnet_cropped_index.csv"))
-        idn_pool = idn[idn.type.isin(args.idnet_countries.split(","))]
-        if args.lim_idn:
-            idn_tr = idn_pool.groupby("label", group_keys=False).apply(
-                lambda g: g.sample(min(len(g), args.lim_idn // 2), random_state=0))
+        df = pd.read_csv(os.path.join(ROOT, "splits", "folds.csv"))
+        if args.full_data:
+            vname = "full"
+            tr = df.copy()
+            va = df.groupby(["type", "label"], group_keys=False).apply(
+                lambda g: g.sample(min(len(g), 200), random_state=0))  # informational only, IN training
+        elif args.holdout:
+            val_mask = df.type == args.holdout; vname = "hold_" + args.holdout.replace("/", "_")
+            tr, va = df[~val_mask].copy(), df[val_mask].copy()
+        elif args.fold is not None:
+            val_mask = df.strat_fold == args.fold; vname = f"fold{args.fold}"
+            tr, va = df[~val_mask].copy(), df[val_mask].copy()
         else:
-            idn_tr = idn_pool
-        cols = ["id", "label", "type", "source", "path"]
-        tr = pd.concat([tr[cols], idn_tr[cols]], ignore_index=True)
+            raise SystemExit("specify --holdout, --fold, or --full_data")
+        if args.limit:
+            tr = tr.sample(args.limit, random_state=0); va = va.sample(min(args.limit, len(va)), random_state=0)
+        tr["source"] = "freuid"; tr["path"] = ""
 
-        if args.heldout_idnet:
-            idn_ho = idn[idn.type.isin(args.heldout_idnet.split(","))]
-            idn_val = idn_ho.groupby("label", group_keys=False).apply(
-                lambda g: g.sample(min(len(g), args.idn_val_n // 2), random_state=1))
-        elif args.idn_val_from_unused:
-            # every country trains; validation = images the lim_idn sample above did NOT
-            # pick (same countries, disjoint rows, zero overlap with training by construction).
-            unused = idn_pool[~idn_pool.id.isin(set(idn_tr.id))]
-            idn_val = unused.groupby("label", group_keys=False).apply(
-                lambda g: g.sample(min(len(g), args.idn_val_n // 2), random_state=1))
-        # else: no held-out IDNet slice at all -> idn_val stays None, idl stays None;
-        # sel_map["idnet"] falls back to clean FREUID (meaningless once --full_data is
-        # set, since va is IN training) -- avoid this combination, prefer the branches above.
+        idn_val = None
+        if args.idnet_countries:
+            idn = pd.read_csv(os.path.join(ROOT, "external", "idnet_cropped_index.csv"))
+            idn_pool = idn[idn.type.isin(args.idnet_countries.split(","))]
+            if args.lim_idn:
+                idn_tr = idn_pool.groupby("label", group_keys=False).apply(
+                    lambda g: g.sample(min(len(g), args.lim_idn // 2), random_state=0))
+            else:
+                idn_tr = idn_pool
+            cols = ["id", "label", "type", "source", "path"]
+            tr = pd.concat([tr[cols], idn_tr[cols]], ignore_index=True)
+
+            if args.heldout_idnet:
+                idn_ho = idn[idn.type.isin(args.heldout_idnet.split(","))]
+                idn_val = idn_ho.groupby("label", group_keys=False).apply(
+                    lambda g: g.sample(min(len(g), args.idn_val_n // 2), random_state=1))
+            elif args.idn_val_from_unused:
+                # every country trains; validation = images the lim_idn sample above did NOT
+                # pick (same countries, disjoint rows, zero overlap with training by construction).
+                unused = idn_pool[~idn_pool.id.isin(set(idn_tr.id))]
+                idn_val = unused.groupby("label", group_keys=False).apply(
+                    lambda g: g.sample(min(len(g), args.idn_val_n // 2), random_state=1))
+            # else: no held-out IDNet slice at all -> idn_val stays None, idl stays None;
+            # sel_map["idnet"] falls back to clean FREUID (meaningless once --full_data is
+            # set, since va is IN training) -- avoid this combination, prefer the branches above.
     groups = parse_groups(args.aug)
-    print(f"[{vname}] train={len(tr)} (freuid {(tr.source=='freuid').sum()}, idnet {(tr.source=='idnet').sum()}) "
-          f"val={len(va)}  HELDOUT-IDNet={0 if idn_val is None else len(idn_val)}  "
+    gname, gkey = ("GEN-VAL", "genval") if args.split_dir else ("HELDOUT-IDNet", "idnet")
+    print(f"[{vname}] train={len(tr)} {tr.source.value_counts().to_dict()} "
+          f"val={len(va)}  {gname}={0 if idn_val is None else len(idn_val)}  "
           f"res={H}x{W} aug_groups={sorted(groups)} sbi={args.sbi} attacks={args.attacks} "
           f"select_on={args.select_on}")
 
@@ -371,7 +432,8 @@ def main():
 
     tds = TrainDS(tr.id.tolist(), tr.label.values, tr.type.tolist(), H, W, groups, args.sbi, args.attacks,
                  sources=tr.source.tolist(), paths=tr.path.tolist())
-    vds = ValDS(va.id.tolist(), va.label.values, H, W)
+    vds = ValDS(va.id.tolist(), va.label.values, H, W,
+                paths=va.path.tolist() if "path" in va.columns else None)
     tdl = DataLoader(tds, batch_size=args.bs, shuffle=True, num_workers=args.workers,
                      pin_memory=True, drop_last=True, persistent_workers=True,
                      worker_init_fn=_worker_init)
@@ -456,13 +518,13 @@ def main():
         # SELECT ON HELDOUT-IDNet: the in-domain FREUID val (clean AND corrupted "hard" proxy)
         # proved unreliable for RANKING checkpoints (2026-07-08: fold2's best-ever local score
         # scored WORSE on the real LB than fold1's mediocre one). IDNet has zero leakage risk.
-        sel_map = {"idnet": idf, "hard": hf, "clean": f}
+        sel_map = {"idnet": idf, "genval": idf, "hard": hf, "clean": f}
         sel = sel_map[args.select_on] if sel_map[args.select_on] is not None else f
         msg = f"== ep{ep} clean FREUID={f:.4f}(AUC={1-a:.4f},APCER@1%={apc:.4f})"
         if args.hardval:
             msg += f" | HARD FREUID={hf:.4f}(AUC={1-ha:.4f},APCER@1%={hap:.4f})"
         if idl is not None:
-            msg += f" | HELDOUT-IDNet FREUID={idf:.4f}(AUC={1-ida:.4f},APCER@1%={idapc:.4f})"
+            msg += f" | {gname} FREUID={idf:.4f}(AUC={1-ida:.4f},APCER@1%={idapc:.4f})"
         msg += f" | train={train_t:.0f}s({tput:.1f}img/s)"
         print(msg, flush=True)
         if wb is not None:
@@ -472,7 +534,7 @@ def main():
             if hf is not None:
                 log.update({"hard/freuid": hf, "hard/audet": ha, "hard/apcer": hap})
             if idf is not None:
-                log.update({"idnet/freuid": idf, "idnet/audet": ida, "idnet/apcer": idapc})
+                log.update({f"{gkey}/freuid": idf, f"{gkey}/audet": ida, f"{gkey}/apcer": idapc})
             wb.log(log, step=ep)
         save_state(ep)
         if sel < best["freuid"]:
