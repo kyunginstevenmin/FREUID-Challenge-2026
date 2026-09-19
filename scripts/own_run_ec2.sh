@@ -31,7 +31,10 @@ setup() {
   [[ -d $FORK ]] || git clone -b $BRANCH https://github.com/kyunginstevenmin/FREUID-Challenge-2026.git
   # Pinned stack (CLAUDE.md CRITICAL #1): the PyPI torch wheel bundles its CUDA runtime, so the
   # DL AMI's driver is all we need from the image. Do NOT use /opt/pytorch (2.10) for training.
-  [[ -d $VENV ]] || python3 -m venv "$VENV"
+  # Ubuntu's python3 -m venv needs the python3-venv apt package to bootstrap pip; without it the
+  # venv dir is created but has no pip. So test for pip, not the dir, and --clear a half-built one.
+  python3 -c "import ensurepip" 2>/dev/null || sudo apt-get install -y -q python3-venv
+  [[ -x $VENV/bin/pip ]] || python3 -m venv --clear "$VENV"
   $PY -m pip install -q --upgrade pip
   $PY -m pip install -q -r "$FORK/docker/requirements.txt"
   $PY -m pip install -q albumentations pyyaml scikit-learn wandb awscli pytest
