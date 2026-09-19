@@ -1,6 +1,42 @@
-# Task list — backbone ablation prep
+# Task list
 
-> **Active plan (2026-09-17): [plans/2026-09-17-first-own-run-plan.md](plans/2026-09-17-first-own-run-plan.md)** — first own model under EVALUATION.md. This file remains the parked ablation checklist.
+## Active — first own run (plan: [plans/2026-09-17-first-own-run-plan.md](plans/2026-09-17-first-own-run-plan.md))
+
+Steps 0–2 done 2026-09-17. Checklist for the rest (profiling ride-alongs
+added 2026-09-18; see [PROFILING.md](PROFILING.md) for rules and the knob table):
+
+- [x] 3a. `configs/own_v2_ctrl_s42.yaml` + runbook "own-run" section.
+      (2026-09-18: config committed to the plan's spec, speed knobs deliberately
+      absent until 3c; `scripts/own_run_ec2.sh` with setup/smoke/ceiling/wait/
+      train/resume modes = runbook §0b; pinned venv on the box, tests run there
+      first; smoke tags + project isolated from the control run's W&B id.
+      2 config tests added. Nothing executed on CUDA yet — 3b is the next action.)
+- [ ] 3b. Smoke on the instance: `--limit 48 --epochs 1 --workers 4`, once
+      plain, once with `--compile --fused_opt` (CUDA shakeout of perf.py and the
+      new flags; resolved dump shows the flags).
+- [ ] 3c. Ceiling script, ViT-L 448×728 bs 6, plain vs `--compile --fused_opt`
+      → `results/gpu_ceiling.csv`. **Decide:** ≥ 15 % faster ⇒ flags go into the
+      control config (last free moment to adopt them; basis: prior). bf16 stays
+      out unless the smoke log shows scaler overflow skips.
+- [ ] 3d. Data-wait check: `--limit 500 --workers 16` pass, read `wait=`.
+      ≥ 15 % ⇒ `--workers` sweep + NVMe check before launch.
+- [ ] 3e. Kyungin writes the cycle-zero verdict rows in PROFILING.md (ceiling
+      side; the real side lands with 4).
+- [ ] 4. Pre-register in EVALUATION.md §6 (config path + SHAs, seed, epochs,
+      selection rule), bump DRAFT → binding, launch under tmux + escrow. The
+      run's `perf/*` readouts are the ViT-L cycle-zero row.
+- [ ] 5. Epoch freeze (bootstrap over per-epoch gen-val preds), deploy readout,
+      failure-mode slices, `docs/RESULTS.md` entry.
+- [ ] 6. Ablations, one flag each; family-2 arms (res / bs / LoRA depth) get a
+      ceiling cost curve before any score run.
+- [ ] 7. Harness probe (REF through `infer_private.py`, constant-filled), final
+      pick written in §6 first, one submission.
+
+---
+
+# Parked — backbone ablation prep
+
+> **Superseded 2026-09-17** by the active plan above. This file section remains the parked ablation checklist.
 
 > **⚠ PARKED 2026-09-12.** The program is paused, not deleted: the fingerprint
 > session (docs/DATA.md, open-question 0) proved the as-shipped Zenodo IDNet
@@ -164,6 +200,9 @@ the authoritative spec of items 1a–1c.
       measurement-only window). Findings may drive plumbing changes ONLY
       (workers/pin_memory/disk) — bs/accum/precision/compile are frozen by the
       protocol (PROFILING.md Method).
+      **(2026-09-18: the frozen-knob rule is superseded — PROFILING.md now uses
+      the pairing rule and always-on readouts; the readouts fill the table
+      automatically on any run. Kept for history.)**
 
 ## Parked (needs no decision now)
 

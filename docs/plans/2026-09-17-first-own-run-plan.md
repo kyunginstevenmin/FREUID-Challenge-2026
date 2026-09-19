@@ -27,6 +27,12 @@ command).
 
 Steps 0 and 1 are independent — run 0 on EC2 while 1 is written locally.
 
+**Profiling (added 2026-09-18):** no separate profiling step. The always-on
+readouts in train.py (data-wait fraction, peak mem, TFLOPS/MFU — see
+[PROFILING.md](../PROFILING.md)) make the control arm itself the cycle-zero
+measurement; the speed-knob decision is gated at step 3 on a minutes-long
+ceiling-script number, before the $15 run. Details under steps 3, 4 and 6.
+
 ## Step 0 — REF baseline on gen-val (no submission) — DONE 2026-09-17
 
 Result in id-fraud-detection EVALUATION.md §6 "Baselines": deploy source-macro
@@ -137,6 +143,29 @@ Smoke: `--config ... --limit 48 --epochs 1 --workers 4` on the instance (no
 CUDA locally) — proves loading, the gen-val eval path, W&B, checkpoint +
 resume. Then bake the AMI (runbook §3).
 
+Profiling ride-alongs on the same instance session (added 2026-09-18; all
+minutes, not hours):
+
+- The smoke run is the first CUDA exercise of `src/perf.py` (FLOP count under
+  autocast, the data-wait timer) and of `--compile --fused_opt`: run the smoke
+  once plain and once with both flags. Both must complete; the resolved dump
+  must show the flags.
+- Cost side of the family-1 knobs: `python src/gpu_ceiling.py --backbone
+  vit_large_patch14_reg4_dinov2 --res 448x728 --bs 6` plain, then with
+  `--compile --fused_opt`. **Decision rule (basis: prior, 2026-09-18):** if the
+  compiled ceiling is ≥ 15 % faster, `compile: true` and `fused_opt: true` go
+  into `own_v2_ctrl_s42.yaml` and become part of the frozen recipe — there is no
+  fp16/eager control to be at parity with yet, so this is the one moment the
+  bundle is free to adopt; after launch it would cost a full parity run.
+  bf16 stays OUT of the control (no speed gain on Ampere; historical recipe is
+  fp16) unless the smoke log shows GradScaler overflow skips.
+- Data-wait check: a `--limit 500 --workers 16` pass (the 3a-style smoke) and
+  read `wait=` from the console line. ≥ 15 % → sweep `--workers` (and check
+  the NVMe mount) before launch; the 3c smoke hinted at input starvation
+  (ceiling 26.4 vs real 15.1 img/s on ViT-B, profiler-polluted).
+- Record the ceiling rows (`results/gpu_ceiling.csv`) and the verdict in
+  PROFILING.md's results table — Kyungin writes the verdict rows.
+
 ## Step 4 — first own run
 
 - Pre-register in EVALUATION.md §6 before launch: recipe (config path + git
@@ -145,7 +174,11 @@ resume. Then bake the AMI (runbook §3).
   status line).
 - Launch under tmux with the S3 escrow loop (runbook §4). Spot death →
   resume from `last.pt` (runbook §5).
-- Wall: ~5 × 3 h + evals ≈ 16–20 h; spot ≈ $12–15.
+- Wall: ~5 × 3 h + evals ≈ 16–20 h; spot ≈ $12–15 — before any step-3
+  speed-knob adoption; revise from the ceiling number.
+- The run's `perf/*` readouts are PROFILING.md's cycle-zero row for ViT-L on
+  this GPU (A10G). If the local A4500 is in play, the same config there gives
+  the A4500 row and the first entry of the cost-per-instance table for free.
 
 ## Step 5 — analysis and epoch freeze
 
@@ -169,10 +202,15 @@ resume. Then bake the AMI (runbook §3).
 | retrain to frozen count | `epochs: k` (k = frozen epoch) | annealed epoch-k beats the mid-schedule epoch-k checkpoint | EVALUATION.md §3.1 alt (a) |
 | average tied checkpoints | uniform average of the CI-tied lean ckpts (script TBD, ~20 lines) | soup beats the default pick | EVALUATION.md §3.1 alt (b) |
 | LP-FT (linear probe, then fine-tune) | train the head on frozen DINOv2 features first (LoRA off, ~1 short epoch), then the normal recipe from that head; new `--lp_epochs N` flag | Kumar et al. 2022: a random head distorts pretrained features early under a large shift — our exact setup; gain should show on the print-capture sources | ARCHITECTURE.md open decision 6 |
+| resolution (PROFILING.md family 2) | `res:` one step up or down (e.g. 518×840 / 322×518) | fine print-capture artefacts favour more tokens; cost curve from `gpu_ceiling.py --res a,b,c` decides which point is affordable BEFORE the score run | PROFILING.md knob table; register here when chosen |
+| batch size + LR rule (family 2) | `bs:` up with `accum:` down, LR rule stated in advance | mostly a speed lever (MFU); score should hold — a cheap arm only if the ceiling `--bs` sweep shows a real img/s gain | PROFILING.md knob table |
+| LoRA depth (family 2) | `only_last: N` (needs a CLI flag) | backward stops at the first adapted block → large speed gain; score hypothesis weak (less adaptation) — run only if the cost curve is compelling | PROFILING.md knob table |
 
 Order: run the one the control-arm failure-mode table points at first. Each
 arm: 1 seed (decided) → directional; add a second seed only if the CIs are
-close.
+close. Family-2 arms get their cost curve from the ceiling script first
+(minutes); a score run is spent only on points the curve makes affordable —
+one knob per cycle (PROFILING.md rule 2).
 
 ## Step 7 — final pick + submission
 

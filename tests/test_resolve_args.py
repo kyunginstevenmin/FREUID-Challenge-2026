@@ -7,10 +7,17 @@ import os
 
 import pytest
 
-from train import resolve_args, validate_cfg, build_parser
+from train import resolve_args, validate_cfg, build_parser, LEGACY_DATA_FLAGS
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 CFG_B = os.path.join(REPO, "configs", "bbabl_cv5_B_s42.yaml")
+CFG_OWN = os.path.join(REPO, "configs", "own_v2_ctrl_s42.yaml")
+
+# The own-run plan's step-3 control arm, as flags:
+CLI_OWN = ("--split_dir ../../id-fraud-detection/dataset_final --epochs 5 --bs 6 --accum 4 "
+           "--eval_bs 8 --res 448x728 --aug core --sbi 0.0 --backbone vit_large_patch14_reg4_dinov2 "
+           "--head_type patch --lora_r 16 --select_on genval --workers 16 --save_every 250 "
+           "--wandb --wandb_project freuid-own --seed 42 --tag own_v2_ctrl_s42").split()
 
 # The BACKBONE_ABLATION.md arm-B command, as flags:
 CLI_B = ("--full_data --epochs 5 --bs 6 --accum 4 --eval_bs 8 --res 448x728 "
@@ -62,3 +69,20 @@ def test_coercion_and_yaml_bools(tmp_path):
 
 def test_empty_config_is_noop():
     assert validate_cfg({}, build_parser()) == {}
+
+
+def test_own_ctrl_yaml_equals_cli():
+    a, b = resolve_args(CLI_OWN), resolve_args(["--config", CFG_OWN])
+    assert ns_dict(a) == ns_dict(b)
+
+
+def test_own_ctrl_is_the_plain_recipe():
+    """Control arm = split_dir mode with no legacy data flags and no speed knobs: the
+    step-3c decision adds compile/fused_opt to the YAML explicitly, never by accident."""
+    args = resolve_args(["--config", CFG_OWN])
+    defaults = vars(build_parser().parse_args([]))
+    assert args.split_dir and args.select_on == "genval"
+    assert all(getattr(args, k) == defaults[k] for k in LEGACY_DATA_FLAGS)
+    assert (args.precision, args.grad_ckpt) == ("fp16", False)
+    if args.compile or args.fused_opt:          # allowed only once 3c has decided, on record
+        assert "3c" in open(CFG_OWN).read()

@@ -29,6 +29,40 @@ bash ref_genval_ec2.sh          # clone both repos, pull ~33 GB, evaluate raw + 
 sync (§6). Then record REF's table in id-fraud-detection EVALUATION.md §6.
 Prereq: `git push fork feat/attnpool-head` (the script clones from the fork).
 
+## 0b. Own run, steps 3–4 of the plan (2026-09-18)
+
+One script, one mode per call — `scripts/own_run_ec2.sh` — on a g5.4xlarge
+(§1–2; instance role needs S3 read on `pscc-net-training` and read/write on
+the ablation bucket), inside tmux, from the directory that will hold both
+repos. It builds a **pinned venv** (torch 2.6.0 / timm 1.0.27 from
+`docker/requirements.txt`; the AMI's `/opt/pytorch` is 2.10 and is NOT used
+for training), pulls `dataset_final` + the four image prefixes (~33 GB, same
+sync as step 0), and runs `pytest tests/` on the box before anything else.
+
+```bash
+curl -sO https://raw.githubusercontent.com/kyunginstevenmin/FREUID-Challenge-2026/feat/attnpool-head/scripts/own_run_ec2.sh
+bash own_run_ec2.sh setup                 # ~15 min; ends with the test suite green on CUDA
+export WANDB_API_KEY=...                   # paste at runtime; never commit
+bash own_run_ec2.sh smoke                 # 3b  --limit 48: plain, --compile --fused_opt, resume check
+bash own_run_ec2.sh ceiling               # 3c  gpu_ceiling.py plain vs compiled -> results/gpu_ceiling.csv
+bash own_run_ec2.sh wait                  # 3d  --limit 500 --workers 16: read wait= / peak_mem=
+# decide 3c (>= 15 % faster -> compile/fused into the YAML) and 3d (wait >= 15 % -> --workers sweep);
+# commit the YAML, git pull on the box, pre-register in EVALUATION.md §6, then:
+PREREG=1 bash own_run_ec2.sh train        # 4   control arm + escrow loop; ~16-20 h, spot ≈ $12-15
+bash own_run_ec2.sh resume                # after a spot death: pulls checkpoints, same command + --resume
+```
+
+Acceptance for the smoke (all printed by the script): `resume OK`, the
+resolved dump of the compile smoke shows `compile: true`, and each log has a
+`perf: gpu=... peak=...` line (MFU lookup found the A10G). Smoke runs use
+their own tags and the `freuid-own-smoke` W&B project — **never the control
+tag**: the W&B run id is `<tag>_dataset_final` with `resume="allow"`, so a
+smoke under the real tag would be silently resumed into by the real run.
+
+Then **bake the AMI** (§3, last paragraph) so a spot replacement boots in
+minutes. After the run: `aws s3 sync <bucket>/oof oof` locally and
+`python src/freeze_epoch.py --tag own_v2_ctrl_s42` (plan step 5).
+
 ## 0. One-time local prep
 
 ```bash
@@ -63,6 +97,13 @@ Rules:
   spot capacity for the type is flaky in your region.
 - Recipe flags are frozen by the protocols — the instance may change wall-clock,
   never the command line (workers is plumbing, allowed; bs/accum is not).
+  *(2026-09-18: for the own run the recipe is unfrozen until the control arm
+  launches; PROFILING.md's pairing rule replaces this line. The instance still
+  never changes the command line mid-campaign.)*
+- The A10G is the **default, not a measurement**: it matches the A4500 the
+  recipe was tuned on, has 16 vCPU for 16 workers and local NVMe. The L40S
+  comparison (5× peak, 8 vCPU) is PROFILING.md question 3 — `own_run_ec2.sh
+  ceiling` + `wait` on a g6e.2xlarge answer it in minutes if wanted.
 
 ## 2. Launch
 

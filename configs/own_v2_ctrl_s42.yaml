@@ -1,0 +1,26 @@
+# First own run = EVALUATION.md §2.4 control arm (docs/plans/2026-09-17-first-own-run-plan.md step 3).
+# Launch (local layout): python src/train.py --config configs/own_v2_ctrl_s42.yaml
+# On EC2 the repos sit side by side -> scripts/own_run_ec2.sh passes --split_dir explicitly.
+# Smoke runs MUST override --tag (W&B run id = <tag>_dataset_final with resume=allow;
+# a smoke under this tag would be silently resumed into by the real run).
+split_dir: ../../id-fraud-detection/dataset_final   # v2; image paths resolve against its parent
+epochs: 5            # winner trained 5, shipped ep2; §3.1 freezes the count after this run
+bs: 6
+accum: 4             # effective 24, the winner's allowance
+eval_bs: 8
+res: 448x728
+aug: core
+sbi: 0.0             # synthetic-fraud injection OFF (ARCHITECTURE.md open decision 5; ablation arm)
+backbone: vit_large_patch14_reg4_dinov2
+head_type: patch
+lora_r: 16
+select_on: genval    # gen-val source-macro; tie -> earliest (freeze_epoch.py, offline)
+workers: 16          # plumbing: retune from the data-wait readout, never a recipe change
+save_every: 250
+wandb: true
+wandb_project: freuid-own
+seed: 42
+tag: own_v2_ctrl_s42
+# Speed knobs (PROFILING.md family 1) are deliberately absent: step 3c decides from the
+# ceiling-script number whether `compile: true` / `fused_opt: true` join the control recipe
+# (>= 15 % faster => yes; basis: prior, 2026-09-18). Precision stays fp16 (historical recipe).
