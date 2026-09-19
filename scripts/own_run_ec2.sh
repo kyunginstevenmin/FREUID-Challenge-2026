@@ -36,11 +36,9 @@ setup() {
   python3 -c "import ensurepip" 2>/dev/null || { sudo apt-get update -q; sudo apt-get install -y -q python3-venv; }   # stale AMI index -> update first
   [[ -x $VENV/bin/pip ]] || python3 -m venv --clear "$VENV"
   $PY -m pip install -q --upgrade pip
-  # docker/requirements.txt pins numpy 1.24.4 for the py3.11 submission image; it has no py3.12
-  # wheel (AMI python is 3.12) and fails to build. Same pins otherwise; numpy = last 1.x with a wheel.
-  grep -v '^numpy==' "$FORK/docker/requirements.txt" > /tmp/req.txt
-  $PY -m pip install -q -r /tmp/req.txt numpy==1.26.4
-  $PY -m pip install -q albumentations pyyaml scikit-learn wandb awscli pytest
+  $PY -m pip install -r "$FORK/requirements-train.txt"          # not -q: version list stays visible on failure
+  mkdir -p "$FORK/results"
+  $PY -m pip freeze > "$FORK/results/pip_freeze_$(date +%F).txt"    # the exact env, for the record
   mkdir -p "$IFD"
   cd "$IFD"   # train/val/test.csv reference exactly these four prefixes (checked 2026-09-18)
   aws s3 sync $DATA_BUCKET/dataset_final/                    dataset_final/                        --only-show-errors
