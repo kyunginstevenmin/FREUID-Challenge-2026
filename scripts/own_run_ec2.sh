@@ -35,6 +35,8 @@ setup() {
   # venv dir is created but has no pip. So test for pip, not the dir, and --clear a half-built one.
   python3 -c "import ensurepip" 2>/dev/null || { sudo apt-get update -q; sudo apt-get install -y -q python3-venv; }   # stale AMI index -> update first
   [[ -x $VENV/bin/pip ]] || python3 -m venv --clear "$VENV"
+  # torch.compile (inductor/triton) builds a C extension against Python.h -> needs python3-dev.
+  [[ -f /usr/include/python3.12/Python.h ]] || { sudo apt-get update -q; sudo apt-get install -y -q python3-dev; }
   $PY -m pip install -q --upgrade pip
   $PY -m pip install -r "$FORK/requirements-train.txt"          # not -q: version list stays visible on failure
   mkdir -p "$FORK/results"
