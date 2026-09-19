@@ -33,7 +33,7 @@ setup() {
   # DL AMI's driver is all we need from the image. Do NOT use /opt/pytorch (2.10) for training.
   # Ubuntu's python3 -m venv needs the python3-venv apt package to bootstrap pip; without it the
   # venv dir is created but has no pip. So test for pip, not the dir, and --clear a half-built one.
-  python3 -c "import ensurepip" 2>/dev/null || sudo apt-get install -y -q python3-venv
+  python3 -c "import ensurepip" 2>/dev/null || { sudo apt-get update -q; sudo apt-get install -y -q python3-venv; }   # stale AMI index -> update first
   [[ -x $VENV/bin/pip ]] || python3 -m venv --clear "$VENV"
   $PY -m pip install -q --upgrade pip
   $PY -m pip install -q -r "$FORK/docker/requirements.txt"
