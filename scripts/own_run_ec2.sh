@@ -36,7 +36,10 @@ setup() {
   python3 -c "import ensurepip" 2>/dev/null || { sudo apt-get update -q; sudo apt-get install -y -q python3-venv; }   # stale AMI index -> update first
   [[ -x $VENV/bin/pip ]] || python3 -m venv --clear "$VENV"
   $PY -m pip install -q --upgrade pip
-  $PY -m pip install -q -r "$FORK/docker/requirements.txt"
+  # docker/requirements.txt pins numpy 1.24.4 for the py3.11 submission image; it has no py3.12
+  # wheel (AMI python is 3.12) and fails to build. Same pins otherwise; numpy = last 1.x with a wheel.
+  grep -v '^numpy==' "$FORK/docker/requirements.txt" > /tmp/req.txt
+  $PY -m pip install -q -r /tmp/req.txt numpy==1.26.4
   $PY -m pip install -q albumentations pyyaml scikit-learn wandb awscli pytest
   mkdir -p "$IFD"
   cd "$IFD"   # train/val/test.csv reference exactly these four prefixes (checked 2026-09-18)
@@ -47,7 +50,7 @@ setup() {
   aws s3 sync $DATA_BUCKET/dataset_cls/IDNet_v2/             dataset_cls/IDNet_v2/                 --only-show-errors
   cd "$FORK"
   mkdir -p logs results checkpoints oof
-  $PY -c "import torch, timm; print('torch', torch.__version__, 'timm', timm.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.get_device_name())"
+  $PY -c "import torch, timm; import numpy; print('torch', torch.__version__, 'timm', timm.__version__, 'numpy', numpy.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.get_device_name())"
   $PY -m pytest tests/ -q
   echo "setup done -> next: export WANDB_API_KEY=...; bash own_run_ec2.sh smoke"
 }
