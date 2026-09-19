@@ -22,6 +22,7 @@ from augment import (build_transform, self_blend, region_swap, text_field_edit, 
 from model import FreuidModel
 from freuid_metric import freuid_score
 from evaluate import macro_scores
+from perf import TimedLoader, count_forward_flops, gpu_peak_tflops, step_metrics
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -231,11 +232,11 @@ def focal_bce(logits, targets, alpha=0.25, gamma=2.0):
 
 
 @torch.no_grad()
-def evaluate(model, dl):
+def evaluate(model, dl, dtype=torch.float16):
     model.eval(); ps, ys = [], []
     for x, y in dl:
         x = x.cuda(non_blocking=True)
-        with torch.autocast("cuda", dtype=torch.float16):
+        with torch.autocast("cuda", dtype=dtype):
             ps.append(torch.sigmoid(model(x)).float().cpu())
         ys.append(y)
     p = torch.cat(ps).numpy(); y = torch.cat(ys).numpy()
@@ -319,6 +320,22 @@ def build_parser():
                     help="collect ONE torch.profiler trace (PROFILING.md method: wait=5 warmup=2 "
                          "active=5, first epoch only) into profiles/<tag>/ for the TensorBoard "
                          "trace viewer. Off by default; ablation launch configs never set it")
+    # --- speed knobs (PROFILING.md family 1: expected score-neutral; verify parity once) ---
+    ap.add_argument("--precision", type=str, default="fp16", choices=["fp16", "bf16"],
+                    help="autocast dtype. fp16 (default, historical recipe) uses GradScaler; "
+                         "bf16 needs no scaler (no overflow-skipped steps). Ampere+ only")
+    ap.add_argument("--compile", action="store_true",
+                    help="torch.compile the training forward (dynamic=False; shapes are fixed by "
+                         "drop_last). Eval/ckpt use the uncompiled module. First epoch pays "
+                         "compile time -- read steady-state img/s from later epochs")
+    ap.add_argument("--fused_opt", action="store_true", help="AdamW(fused=True)")
+    ap.add_argument("--grad_ckpt", action="store_true",
+                    help="timm gradient checkpointing on the backbone: trades ~30%% compute for "
+                         "activation memory -- a means to reach a bigger --bs/--res, not a knob "
+                         "on its own (PROFILING.md family 2)")
+    ap.add_argument("--gpu_peak_tflops", type=float, default=0.0,
+                    help="dense fp16/bf16 tensor-core peak for MFU; 0 = look up by GPU name "
+                         "(perf.PEAK_TFLOPS), unknown GPU -> MFU omitted")
     return ap
 
 def validate_cfg(cfg, ap):
@@ -467,17 +484,29 @@ def main():
     model = FreuidModel(backbone=args.backbone, lora_r=args.lora_r, head_type=args.head_type).cuda()
     nt = model.trainable_params()
     print(f"trainable {nt/1e6:.2f}M  lora_modules={model.n_lora}")
+    if args.grad_ckpt:
+        model.backbone.set_grad_checkpointing(True)
+    amp_dtype = torch.bfloat16 if args.precision == "bf16" else torch.float16
+    # `model` stays the source of truth for state_dict/eval; `fwd` is what the train step calls.
+    fwd = torch.compile(model, dynamic=False) if args.compile else model
+    # Always-on cost readouts (PROFILING.md): forward FLOPs counted once on the fixed train
+    # batch shape; peak from GPU name -> MFU per epoch alongside img/s.
+    fwd_flops = count_forward_flops(model, torch.randn(args.bs, 3, H, W, device="cuda"), amp_dtype)
+    peak = gpu_peak_tflops(override=args.gpu_peak_tflops)
+    print(f"perf: gpu={torch.cuda.get_device_name()} peak={peak or 'unknown'} TFLOPS "
+          f"fwd={fwd_flops/1e9:.1f} GFLOP/batch(bs={args.bs}) precision={args.precision} "
+          f"compile={args.compile} fused_opt={args.fused_opt} grad_ckpt={args.grad_ckpt}", flush=True)
     head_p = [p for n, p in model.named_parameters() if p.requires_grad and "head" in n]
     lora_p = [p for n, p in model.named_parameters() if p.requires_grad and "head" not in n]
     opt = torch.optim.AdamW([
         {"params": head_p, "lr": args.lr_head, "weight_decay": args.wd},
         {"params": lora_p, "lr": args.lr_lora, "weight_decay": 0.0},
-    ])
+    ], fused=args.fused_opt)
     steps = max(1, len(tdl) // args.accum) * args.epochs
     warm = max(1, int(0.05 * steps))
     def lr_at(s): return s / warm if s < warm else 0.5 * (1 + math.cos(math.pi * (s - warm) / max(1, steps - warm)))
     sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_at)
-    scaler = torch.cuda.amp.GradScaler()
+    scaler = torch.amp.GradScaler("cuda", enabled=(args.precision == "fp16"))
     last_path = os.path.join(CKPT_DIR, f"{args.tag}_{vname}_last.pt")
     best_path = os.path.join(CKPT_DIR, f"{args.tag}_{vname}.pt")
     best = {"freuid": 1e9}; gstep = 0; start_ep = 0
@@ -494,8 +523,10 @@ def main():
         start_ep = ck["ep"] + 1; gstep = ck["gstep"]; best = ck["best"]
         print(f"resumed {last_path} -> start ep{start_ep} (best={best.get('freuid'):.4f})", flush=True)
 
+    ttdl = TimedLoader(tdl)
     for ep in range(start_ep, args.epochs):
         model.train(); t0 = time.time(); run = 0.0
+        torch.cuda.reset_peak_memory_stats()
         opt.zero_grad(set_to_none=True)
         prof = None
         if args.profile and ep == start_ep:   # one trace per run, first trained epoch
@@ -507,11 +538,11 @@ def main():
                 on_trace_ready=torch.profiler.tensorboard_trace_handler(pdir))
             prof.start()
             print(f"profiling: trace -> {pdir} (view: tensorboard --logdir {pdir})", flush=True)
-        for it, (x, y) in enumerate(tdl):
+        for it, (x, y) in enumerate(ttdl):
             x = x.cuda(non_blocking=True); y = y.cuda(non_blocking=True)
-            with torch.autocast("cuda", dtype=torch.float16):
-                loss = focal_bce(model(x), y) / args.accum
-            scaler.scale(loss).backward(); run += loss.item() * args.accum
+            with torch.autocast("cuda", dtype=amp_dtype):
+                loss = focal_bce(fwd(x), y) / args.accum
+            scaler.scale(loss).backward(); run += loss.item() * args.accum   # .item() = per-step sync (TimedLoader relies on it)
             if (it + 1) % args.accum == 0:
                 scaler.step(opt); scaler.update(); opt.zero_grad(set_to_none=True)
                 sched.step(); gstep += 1
@@ -520,19 +551,25 @@ def main():
             if prof is not None:
                 prof.step()
             if (it + 1) % (args.accum * 25) == 0:
-                ips = (it + 1) * args.bs / (time.time() - t0)
-                print(f"  ep{ep} it{it+1}/{len(tdl)} loss={run/(it+1):.4f} lr={sched.get_last_lr()[0]:.2e} {ips:.1f}img/s", flush=True)
+                el = time.time() - t0; ips = (it + 1) * args.bs / el
+                print(f"  ep{ep} it{it+1}/{len(tdl)} loss={run/(it+1):.4f} lr={sched.get_last_lr()[0]:.2e} "
+                      f"{ips:.1f}img/s wait={ttdl.wait/el:.0%}", flush=True)
         if prof is not None:
             prof.stop()
+            with open(os.path.join(pdir, "key_averages.txt"), "w") as fk:   # diagnose from the log, no viewer needed
+                fk.write(prof.key_averages().table(sort_by="cuda_time_total", row_limit=40))
         train_t = time.time() - t0; tput = len(tds) / train_t
+        wait_frac = ttdl.wait / train_t
+        peak_mem = torch.cuda.max_memory_allocated() / 2**30
+        tflops, mfu = step_metrics(fwd_flops, len(tdl), train_t, peak)
         torch.cuda.empty_cache()
-        f, a, apc, p = evaluate(model, vdl)
+        f, a, apc, p = evaluate(model, vdl, amp_dtype)
         hf = ha = hap = None
         if args.hardval:
-            hf, ha, hap, _ = evaluate(model, hvdl)
+            hf, ha, hap, _ = evaluate(model, hvdl, amp_dtype)
         idf = ida = idapc = None; gm = None
         if idl is not None:
-            idf, ida, idapc, gp = evaluate(model, idl)
+            idf, ida, idapc, gp = evaluate(model, idl, amp_dtype)
             if args.split_dir:                # step 2: per-source report + offline tie-rule inputs
                 gm = genval_metrics(gen, gp)
                 np.save(os.path.join(OOF_DIR, f"genvalpred_{args.tag}_{vname}_ep{ep}.npy"), gp)
@@ -551,7 +588,8 @@ def main():
             msg += f" | HARD FREUID={hf:.4f}(AUC={1-ha:.4f},APCER@1%={hap:.4f})"
         if idl is not None:
             msg += f" | {gname} FREUID={idf:.4f}(AUC={1-ida:.4f},APCER@1%={idapc:.4f})"
-        msg += f" | train={train_t:.0f}s({tput:.1f}img/s)"
+        msg += (f" | train={train_t:.0f}s({tput:.1f}img/s) wait={wait_frac:.0%} "
+                f"peak_mem={peak_mem:.1f}GB {tflops:.1f}TFLOPS" + (f" MFU={mfu:.0%}" if mfu is not None else ""))
         print(msg, flush=True)
         if gm is not None:
             print("   GEN-VAL " + "  ".join(f"{k}={v:.4f}" for k, v in sorted(gm["per_source"].items()))
@@ -560,6 +598,8 @@ def main():
         if wb is not None:
             log = {"train/loss": run / max(1, it + 1), "train/sec": train_t,
                    "train/img_per_s": tput, "lr": sched.get_last_lr()[0],
+                   "perf/data_wait_frac": wait_frac, "perf/peak_mem_gb": peak_mem,
+                   "perf/tflops": tflops, **({"perf/mfu": mfu} if mfu is not None else {}),
                    "clean/freuid": f, "clean/audet": a, "clean/apcer": apc}
             if hf is not None:
                 log.update({"hard/freuid": hf, "hard/audet": ha, "hard/apcer": hap})
