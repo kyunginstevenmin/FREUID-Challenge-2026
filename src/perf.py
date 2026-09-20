@@ -4,9 +4,11 @@ and a data-wait timer. Pure measurement -- nothing here changes what a run compu
 MFU (model FLOPs utilization) = achieved FLOP/s / GPU peak FLOP/s. It is the number that
 makes img/s comparable across GPUs (local A4500 vs EC2 candidates). Training FLOPs per
 step are approximated as 3x the forward count (fwd + ~2x for backward), the standard
-convention (PaLM App. B); with a frozen-backbone LoRA the true backward multiplier is a
-bit under 2x, so the MFU printed here is a slight UNDER-estimate. Fine for comparisons,
-which is all it is for.
+convention (PaLM App. B). With a frozen-backbone LoRA the backward skips the weight-grad
+matmul of every frozen Linear, so the true multiplier is ~2-2.5x, not 3x: the FLOPs the GPU
+actually did are FEWER than assumed and the MFU printed here is an OVER-estimate (by up to
+~1.5x; corrected 2026-09-19). Fine for comparisons between configs, which is all it is for;
+do not read it as an absolute efficiency claim.
 """
 from __future__ import annotations
 import time

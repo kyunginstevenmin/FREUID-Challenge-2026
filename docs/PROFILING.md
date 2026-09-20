@@ -36,7 +36,10 @@ Logged per epoch to the console line and W&B under `perf/`:
 
 MFU is what makes img/s comparable across GPUs (A4500 vs EC2 candidates), so it is
 the number for the instance-choice question, not raw img/s. The 3× convention
-slightly under-estimates MFU for frozen-backbone LoRA; comparisons are unaffected.
+**over**-estimates MFU for frozen-backbone LoRA (frozen Linears skip their weight-grad
+matmul; true multiplier ~2–2.5×, so reported MFU is up to ~1.5× too high — corrected
+2026-09-19). The per-GPU peak constants come from vendor spec sheets and were not
+verified on hardware. Treat MFU as a relative number between configs, never absolute.
 
 **Verdict rule (basis: prior, 2026-09-18; revise when a number exists):**
 data-wait ≥ 15 % → input-bound, plumbing (workers, decode, disk) goes first.
