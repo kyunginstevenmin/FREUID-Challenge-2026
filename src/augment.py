@@ -79,6 +79,13 @@ def _ann_band(fields, W, H, rng, bh_frac):
 DEFAULT_GROUPS = {"degrade", "color", "noise", "geometry", "dropout"}
 
 
+# 2026-09-21: ported to albumentations 2.x argument names (2.0.8 pinned in
+# requirements-train.txt) with the INTENDED values. The original 1.x names were silently
+# ignored by 2.x, so the upstream A4500 runs and the 2026-09-19 smoke actually trained on
+# 2.0.8 defaults (jpeg 99-100, downscale x0.25 nearest, noise std 20-44 %, constant
+# borders, 1-2 holes of 10-20 %). Decision 2026-09-21: the control arm uses the intended
+# values -> a known recipe deviation from upstream; state it in the pre-registration.
+# tests/test_augment.py fails if any argument is ignored again.
 def build_transform(groups=DEFAULT_GROUPS):
     if not groups or groups == {"none"}:
         return None
@@ -87,8 +94,9 @@ def build_transform(groups=DEFAULT_GROUPS):
     if "degrade" in g:  # DFDC winner: ImageCompression p0.5 (jpeg is the core capture cue)
         aug += [
             A.OneOf([
-                A.ImageCompression(quality_lower=50, quality_upper=95, p=1.0),
-                A.Downscale(scale_min=0.65, scale_max=0.9, interpolation=cv2.INTER_AREA, p=1.0),
+                A.ImageCompression(quality_range=(50, 95), p=1.0),
+                A.Downscale(scale_range=(0.65, 0.9),
+                            interpolation_pair={"upscale": cv2.INTER_AREA, "downscale": cv2.INTER_AREA}, p=1.0),
             ], p=0.5),
             A.GaussianBlur(blur_limit=(3, 5), p=0.10),  # DFDC blur p0.05 -> keep low
         ]
@@ -100,15 +108,16 @@ def build_transform(groups=DEFAULT_GROUPS):
             A.ToGray(p=0.10),  # DFDC uses 0.2; keep lower to preserve chroma forensic cues
         ]
     if "noise" in g:    # DFDC winner: GaussNoise p0.1 (low). ISONoise dropped (can mask sensor cues)
-        aug += [A.GaussNoise(var_limit=(5, 30), p=0.12)]
+        # 1.x var_limit=(5, 30) on 0-255 -> 2.x std as a fraction of 255 (2.x samples std, not var)
+        aug += [A.GaussNoise(std_range=(5 ** 0.5 / 255, 30 ** 0.5 / 255), p=0.12)]
     if "geometry" in g:  # rotate fragility +0.65, perspective +0.46 (recapture/print)
         # fit_output=True keeps the ENTIRE card in frame (no sections warped off-screen);
         # scale<=1.0 (shrink only) so nothing is pushed out by enlargement.
         aug += [
-            A.Perspective(scale=(0.02, 0.05), pad_mode=cv2.BORDER_REPLICATE,
+            A.Perspective(scale=(0.02, 0.05), border_mode=cv2.BORDER_REPLICATE,
                           fit_output=True, p=0.3),
             A.Affine(rotate=(-4, 4), shear=(-2, 2), scale=(0.90, 1.0),
-                     mode=cv2.BORDER_REPLICATE, fit_output=True, p=0.3),
+                     border_mode=cv2.BORDER_REPLICATE, fit_output=True, p=0.3),
         ]
     if "moire" in g:      # moire fragility +0.37; print/screen recapture is in the test
         aug += [A.Lambda(image=_moire, p=0.25)]
@@ -121,10 +130,9 @@ def build_transform(groups=DEFAULT_GROUPS):
     if "dropout" in g:    # DFDC winner's KEY lever ("dropping parts", GridMask/Severstal).
         # Small, UNBIASED holes (never always over portrait/MRZ) so we don't erase the whole
         # tampered region. Forces many patches to carry forgery signal (synergises w/ patch-MIL).
-        aug += [A.CoarseDropout(max_holes=3, min_holes=1,
-                                max_height=0.10, max_width=0.10,
-                                min_height=0.03, min_width=0.03,
-                                fill_value=0, p=0.35)]
+        aug += [A.CoarseDropout(num_holes_range=(1, 3),
+                                hole_height_range=(0.03, 0.10), hole_width_range=(0.03, 0.10),
+                                fill=0, p=0.35)]
     return A.Compose(aug)
 
 

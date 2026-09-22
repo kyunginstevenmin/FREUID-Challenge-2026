@@ -159,10 +159,26 @@ minutes, not hours):
   bundle is free to adopt; after launch it would cost a full parity run.
   bf16 stays OUT of the control (no speed gain on Ampere; historical recipe is
   fp16) unless the smoke log shows GradScaler overflow skips.
+  *Note (2026-09-22):* the 2026-09-19 smoke logs cannot show skips — GradScaler
+  skips silently and `train.py` never prints the scale (the iteration line
+  fires every 100 its; the smokes ran 8–83). Metrics were finite, which is the
+  only evidence. Possible fix, not implemented: log `scaler.get_scale()` and a
+  skip count (scale dropped after `update()`) on the epoch line + W&B. Until
+  then the rule is unmeasurable and fp16 stays by default.
 - Data-wait check: a `--limit 500 --workers 16` pass (the 3a-style smoke) and
   read `wait=` from the console line. ≥ 15 % → sweep `--workers` (and check
   the NVMe mount) before launch; the 3c smoke hinted at input starvation
   (ceiling 26.4 vs real 15.1 img/s on ViT-B, profiler-polluted).
+- *Added 2026-09-22 (from the 2026-09-19 smoke/ceiling review):* **eval is
+  ≈ ¼ of an epoch and was invisible.** The epoch readouts time training only,
+  but every epoch also scores val + gen-val (≈ 37.9k images; REF's single-scale
+  pass ran ≈ 24 img/s on this GPU ⇒ ≈ 26 min, against ≈ 85 min of compiled
+  training). `train.py` now prints `eval=<s>` on the epoch line and logs
+  `eval/sec`; `eval_bs` goes 8 → 32 in the control config (eval-only,
+  `no_grad`, plumbing — per-image outputs unchanged; gain read from `eval/sec`
+  on the run, not assumed). The 3b smoke must be re-run once with the final
+  config (compile/fused_opt in the YAML, intended augmentations, eval_bs 32)
+  before pre-registration.
 - Record the ceiling rows (`results/gpu_ceiling.csv`) and the verdict in
   PROFILING.md's results table — Kyungin writes the verdict rows.
 
@@ -174,8 +190,10 @@ minutes, not hours):
   status line).
 - Launch under tmux with the S3 escrow loop (runbook §4). Spot death →
   resume from `last.pt` (runbook §5).
-- Wall: ~5 × 3 h + evals ≈ 16–20 h; spot ≈ $12–15 — before any step-3
-  speed-knob adoption; revise from the ceiling number.
+- Wall (revised 2026-09-22 from the 2026-09-19 measurements): train split
+  63,382 images at 12.4 img/s compiled ≈ 85 min/epoch, plus ≈ 26 min eval ⇒
+  ≈ 9–10 h for 5 epochs (plain would be ≈ 12 h); epoch 0 also pays ≈ 75 s of
+  compile. The earlier 16–20 h estimate was a prior.
 - The run's `perf/*` readouts are PROFILING.md's cycle-zero row for ViT-L on
   this GPU (A10G). If the local A4500 is in play, the same config there gives
   the A4500 row and the first entry of the cost-per-instance table for free.

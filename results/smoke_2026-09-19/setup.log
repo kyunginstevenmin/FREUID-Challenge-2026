@@ -1,0 +1,5 @@
+torch 2.6.0+cu124 timm 1.0.27 numpy 2.5.3 cuda True NVIDIA A10G
+..................................ss.................................... [ 97%]
+..                                                                       [100%]
+72 passed, 2 skipped in 12.84s
+setup done -> next: export WANDB_API_KEY=...; bash own_run_ec2.sh smoke

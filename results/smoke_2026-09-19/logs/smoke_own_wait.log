@@ -1,0 +1,60 @@
+wandb: [wandb.login()] Loaded credentials for https://api.wandb.ai from WANDB_API_KEY.
+wandb: Currently logged in as: kyunginstevenmin (kyungin) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.30.0
+wandb: Run data is saved locally in /home/ubuntu/FREUID-Challenge-2026/wandb/run-20260919_180550-smoke_own_wait_dataset_final
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run smoke_own_wait_dataset_final
+wandb: ⭐️ View project at https://wandb.ai/kyungin/freuid-own-smoke
+wandb: 🚀 View run at https://wandb.ai/kyungin/freuid-own-smoke/runs/smoke_own_wait_dataset_final
+/home/ubuntu/FREUID-Challenge-2026/src/augment.py:90: UserWarning: Argument(s) 'quality_lower, quality_upper' are not valid for transform ImageCompression
+  A.ImageCompression(quality_lower=50, quality_upper=95, p=1.0),
+/home/ubuntu/FREUID-Challenge-2026/src/augment.py:91: UserWarning: Argument(s) 'scale_min, scale_max, interpolation' are not valid for transform Downscale
+  A.Downscale(scale_min=0.65, scale_max=0.9, interpolation=cv2.INTER_AREA, p=1.0),
+/home/ubuntu/FREUID-Challenge-2026/src/augment.py:103: UserWarning: Argument(s) 'var_limit' are not valid for transform GaussNoise
+  aug += [A.GaussNoise(var_limit=(5, 30), p=0.12)]
+/home/ubuntu/FREUID-Challenge-2026/src/augment.py:108: UserWarning: Argument(s) 'pad_mode' are not valid for transform Perspective
+  A.Perspective(scale=(0.02, 0.05), pad_mode=cv2.BORDER_REPLICATE,
+/home/ubuntu/FREUID-Challenge-2026/src/augment.py:110: UserWarning: Argument(s) 'mode' are not valid for transform Affine
+  A.Affine(rotate=(-4, 4), shear=(-2, 2), scale=(0.90, 1.0),
+/home/ubuntu/FREUID-Challenge-2026/src/augment.py:124: UserWarning: Argument(s) 'max_holes, min_holes, max_height, max_width, min_height, min_width, fill_value' are not valid for transform CoarseDropout
+  aug += [A.CoarseDropout(max_holes=3, min_holes=1,
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[dataset_final] train=496 {'fantasyid': 124, 'freuid': 124, 'idnet': 124, 'sidt': 124} val=496  GEN-VAL=475  res=448x728 aug_groups=['color', 'degrade', 'dropout', 'geometry', 'noise'] sbi=0.0 attacks=self_blend select_on=genval
+trainable 6.82M  lora_modules=96
+perf: gpu=NVIDIA A10G peak=70.0 TFLOPS fwd=7839.8 GFLOP/batch(bs=6) precision=fp16 compile=False fused_opt=False grad_ckpt=False
+== ep0 clean FREUID=0.9172(AUC=0.6236,APCER@1%=0.9556) | GEN-VAL FREUID=0.9749(AUC=0.5315,APCER@1%=0.9871) | train=55s(9.0img/s) wait=1% peak_mem=12.4GB 35.2TFLOPS MFU=50%
+   GEN-VAL fantasyid=0.9177  freuid=1.0000  idnet=0.9238  sidt=0.6840  | macro_type=0.8642  macro_source=0.8814  <- selection
+wandb: updating run metadata; uploading console lines 15-16
+wandb: uploading history steps 0-0, summary, console lines 17-17
+wandb: 
+wandb: Run history:
+wandb:         clean/apcer ▁
+wandb:         clean/audet ▁
+wandb:        clean/freuid ▁
+wandb:        genval/apcer ▁
+wandb:        genval/audet ▁
+wandb:    genval/fantasyid ▁
+wandb:       genval/freuid ▁
+wandb:        genval/idnet ▁
+wandb: genval/macro_source ▁
+wandb:   genval/macro_type ▁
+wandb:                 +20 ...
+wandb: 
+wandb: Run summary:
+wandb:        best/apcer 0.95565
+wandb:        best/audet 0.37637
+wandb:        best/clean 0.91718
+wandb:        best/epoch 0
+wandb:       best/freuid 0.88137
+wandb:        best/idnet 0.97486
+wandb: best/macro_source 0.88137
+wandb:   best/macro_type 0.86421
+wandb:       clean/apcer 0.95565
+wandb:       clean/audet 0.37637
+wandb:               +28 ...
+wandb: 
+wandb: 🚀 View run smoke_own_wait_dataset_final at: https://wandb.ai/kyungin/freuid-own-smoke/runs/smoke_own_wait_dataset_final
+wandb: ⭐️ View project at: https://wandb.ai/kyungin/freuid-own-smoke
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20260919_180550-smoke_own_wait_dataset_final/logs
+BEST dataset_final: sel(FREUID)=0.8814 clean=0.9172 hard=None (ep0)

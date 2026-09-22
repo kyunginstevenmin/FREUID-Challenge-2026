@@ -1,0 +1,9 @@
+[ceiling] gpu=NVIDIA A10G peak=70.0 TFLOPS vit_large_patch14_reg4_dinov2 head=patch precision=fp16 compile=False fused_opt=False grad_ckpt=False
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  res=448x728 bs=6: 9.2 img/s  653 ms/step  peak_mem=12.4GB  36.0 TFLOPS  MFU=51%
+[ceiling] appended 1 row(s) -> /home/ubuntu/FREUID-Challenge-2026/results/gpu_ceiling.csv
+[ceiling] gpu=NVIDIA A10G peak=70.0 TFLOPS vit_large_patch14_reg4_dinov2 head=patch precision=fp16 compile=True fused_opt=True grad_ckpt=False
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+  res=448x728 bs=6: 12.4 img/s  485 ms/step  peak_mem=12.5GB  48.5 TFLOPS  MFU=69%
+[ceiling] appended 1 row(s) -> /home/ubuntu/FREUID-Challenge-2026/results/gpu_ceiling.csv
+ceiling done -> DECIDE (plan step 3c): compiled >= 15 % faster => add compile: true / fused_opt: true to configs/own_v2_ctrl_s42.yaml, commit, git pull here

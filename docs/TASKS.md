@@ -11,15 +11,24 @@ added 2026-09-18; see [PROFILING.md](PROFILING.md) for rules and the knob table)
       train/resume modes = runbook §0b; pinned venv on the box, tests run there
       first; smoke tags + project isolated from the control run's W&B id.
       2 config tests added. Nothing executed on CUDA yet — 3b is the next action.)
-- [ ] 3b. Smoke on the instance: `--limit 48 --epochs 1 --workers 4`, once
+- [x] 3b. Smoke on the instance: `--limit 48 --epochs 1 --workers 4`, once
       plain, once with `--compile --fused_opt` (CUDA shakeout of perf.py and the
       new flags; resolved dump shows the flags).
-- [ ] 3c. Ceiling script, ViT-L 448×728 bs 6, plain vs `--compile --fused_opt`
+      (2026-09-19 done, g5.4xlarge; logs in results/smoke_2026-09-19/. All three
+      acceptance checks passed. Exposed two bugs, fixed 2026-09-21/22: albumentations
+      2.0.8 silently ignoring augment.py's 1.x kwargs (pinned + ported to the intended
+      values + tests/test_augment.py) and save_state before the best update (resume).
+      Re-run once on the final config before step 4.)
+- [x] 3c. Ceiling script, ViT-L 448×728 bs 6, plain vs `--compile --fused_opt`
       → `results/gpu_ceiling.csv`. **Decide:** ≥ 15 % faster ⇒ flags go into the
       control config (last free moment to adopt them; basis: prior). bf16 stays
       out unless the smoke log shows scaler overflow skips.
-- [ ] 3d. Data-wait check: `--limit 500 --workers 16` pass, read `wait=`.
+      (2026-09-19: plain 9.2 vs compiled+fused 12.4 img/s, +35 % => adopted into the
+      config 2026-09-22. bf16 rule unmeasurable, no scaler logging; fp16 stays.)
+- [x] 3d. Data-wait check: `--limit 500 --workers 16` pass, read `wait=`.
       ≥ 15 % ⇒ `--workers` sweep + NVMe check before launch.
+      (2026-09-19: wait 1 % at 16 workers, 9.0 img/s = 98 % of ceiling. No sweep.
+      Measured on the default augmentations; re-read from the control arm's epoch 1.)
 - [ ] 3e. Kyungin writes the cycle-zero verdict rows in PROFILING.md (ceiling
       side; the real side lands with 4).
 - [ ] 4. Pre-register in EVALUATION.md §6 (config path + SHAs, seed, epochs,

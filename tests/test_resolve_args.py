@@ -15,9 +15,10 @@ CFG_OWN = os.path.join(REPO, "configs", "own_v2_ctrl_s42.yaml")
 
 # The own-run plan's step-3 control arm, as flags:
 CLI_OWN = ("--split_dir ../../id-fraud-detection/dataset_final --epochs 5 --bs 6 --accum 4 "
-           "--eval_bs 8 --res 448x728 --aug core --sbi 0.0 --backbone vit_large_patch14_reg4_dinov2 "
+           "--eval_bs 32 --res 448x728 --aug core --sbi 0.0 --backbone vit_large_patch14_reg4_dinov2 "
            "--head_type patch --lora_r 16 --select_on genval --workers 16 --save_every 250 "
-           "--wandb --wandb_project freuid-own --seed 42 --tag own_v2_ctrl_s42").split()
+           "--wandb --wandb_project freuid-own --seed 42 --tag own_v2_ctrl_s42 "
+           "--compile --fused_opt").split()   # speed knobs adopted at 3c (2026-09-22)
 
 # The BACKBONE_ABLATION.md arm-B command, as flags:
 CLI_B = ("--full_data --epochs 5 --bs 6 --accum 4 --eval_bs 8 --res 448x728 "

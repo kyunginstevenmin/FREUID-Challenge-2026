@@ -1,0 +1,3 @@
+date,gpu,backbone,head_type,lora_r,res,bs,precision,compile,fused_opt,grad_ckpt,img_per_s,ms_per_step,peak_mem_gb,tflops,mfu,note
+2026-09-19 18:04,NVIDIA A10G,vit_large_patch14_reg4_dinov2,patch,16,448x728,6,fp16,False,False,False,9.182957731296316,653.3842554399962,12.358237743377686,35.99614797726314,0.5142306853894735,
+2026-09-19 18:05,NVIDIA A10G,vit_large_patch14_reg4_dinov2,patch,16,448x728,6,fp16,True,True,False,12.364180499320456,485.2727603200037,12.452223300933838,48.46617875135345,0.6923739821621921,

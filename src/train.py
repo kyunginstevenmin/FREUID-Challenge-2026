@@ -563,6 +563,7 @@ def main():
         peak_mem = torch.cuda.max_memory_allocated() / 2**30
         tflops, mfu = step_metrics(fwd_flops, len(tdl), train_t, peak)
         torch.cuda.empty_cache()
+        t_eval = time.time()
         f, a, apc, p = evaluate(model, vdl, amp_dtype)
         hf = ha = hap = None
         if args.hardval:
@@ -583,20 +584,22 @@ def main():
         # scored WORSE on the real LB than fold1's mediocre one). IDNet has zero leakage risk.
         sel_map = {"idnet": idf, "genval": (gm["macro_source"] if gm else idf), "hard": hf, "clean": f}
         sel = sel_map[args.select_on] if sel_map[args.select_on] is not None else f
+        eval_t = time.time() - t_eval  # val + hard + gen-val passes; ~1/4 of an epoch (PROFILING.md)
         msg = f"== ep{ep} clean FREUID={f:.4f}(AUC={1-a:.4f},APCER@1%={apc:.4f})"
         if args.hardval:
             msg += f" | HARD FREUID={hf:.4f}(AUC={1-ha:.4f},APCER@1%={hap:.4f})"
         if idl is not None:
             msg += f" | {gname} FREUID={idf:.4f}(AUC={1-ida:.4f},APCER@1%={idapc:.4f})"
         msg += (f" | train={train_t:.0f}s({tput:.1f}img/s) wait={wait_frac:.0%} "
-                f"peak_mem={peak_mem:.1f}GB {tflops:.1f}TFLOPS" + (f" MFU={mfu:.0%}" if mfu is not None else ""))
+                f"peak_mem={peak_mem:.1f}GB {tflops:.1f}TFLOPS" + (f" MFU={mfu:.0%}" if mfu is not None else "")
+                + f" eval={eval_t:.0f}s")
         print(msg, flush=True)
         if gm is not None:
             print("   GEN-VAL " + "  ".join(f"{k}={v:.4f}" for k, v in sorted(gm["per_source"].items()))
                   + f"  | macro_type={gm['macro_type']:.4f}  macro_source={gm['macro_source']:.4f}"
                   + ("  <- selection" if args.select_on == "genval" else ""), flush=True)
         if wb is not None:
-            log = {"train/loss": run / max(1, it + 1), "train/sec": train_t,
+            log = {"train/loss": run / max(1, it + 1), "train/sec": train_t, "eval/sec": eval_t,
                    "train/img_per_s": tput, "lr": sched.get_last_lr()[0],
                    "perf/data_wait_frac": wait_frac, "perf/peak_mem_gb": peak_mem,
                    "perf/tflops": tflops, **({"perf/mfu": mfu} if mfu is not None else {}),
@@ -610,7 +613,6 @@ def main():
                 log.update({f"genval/type/{k}": v for k, v in gm["per_type"].items()})
                 log.update({"genval/macro_type": gm["macro_type"], "genval/macro_source": gm["macro_source"]})
             wb.log(log, step=ep)
-        save_state(ep)
         if sel < best["freuid"]:
             best = {"freuid": float(sel), "clean": float(f), "hard": (float(hf) if hf is not None else None),
                     "idnet": (float(idf) if idf is not None else None),
@@ -622,6 +624,7 @@ def main():
             np.save(os.path.join(OOF_DIR, f"valid_{args.tag}_{vname}.npy"), va.id.values)
             if wb is not None:
                 wb.summary.update({f"best/{k}": v for k, v in best.items()})
+        save_state(ep)  # after the best-update: _last.pt must carry this epoch's best (resume bug, 2026-09-21)
     print(f"BEST {vname}: sel(FREUID)={best['freuid']:.4f} clean={best.get('clean'):.4f} "
           f"hard={best.get('hard')} (ep{best.get('epoch')})")
     with open(os.path.join(CKPT_DIR, f"{args.tag}_{vname}.json"), "w") as fjson:

@@ -7,7 +7,7 @@ split_dir: ../../id-fraud-detection/dataset_final   # v2; image paths resolve ag
 epochs: 5            # winner trained 5, shipped ep2; §3.1 freezes the count after this run
 bs: 6
 accum: 4             # effective 24, the winner's allowance
-eval_bs: 8
+eval_bs: 32          # eval-only (no_grad), plumbing; 8 -> 32 on 2026-09-22: eval is ~1/4 of an epoch
 res: 448x728
 aug: core
 sbi: 0.0             # synthetic-fraud injection OFF (ARCHITECTURE.md open decision 5; ablation arm)
@@ -21,6 +21,9 @@ wandb: true
 wandb_project: freuid-own
 seed: 42
 tag: own_v2_ctrl_s42
-# Speed knobs (PROFILING.md family 1) are deliberately absent: step 3c decides from the
-# ceiling-script number whether `compile: true` / `fused_opt: true` join the control recipe
-# (>= 15 % faster => yes; basis: prior, 2026-09-18). Precision stays fp16 (historical recipe).
+# Speed knobs (PROFILING.md family 1), adopted per step 3c on 2026-09-22: ceiling script on the
+# A10G 2026-09-19, plain 9.2 vs compiled+fused 12.4 img/s (+35 %, rule was >= 15 %;
+# results/gpu_ceiling.csv). Precision stays fp16 (historical recipe; the bf16 rule is
+# unmeasurable -- see the plan's 3c note).
+compile: true
+fused_opt: true

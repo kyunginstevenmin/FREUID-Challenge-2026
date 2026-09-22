@@ -7,7 +7,7 @@ timm==1.0.27
 opencv-python-headless==4.10.0.84
 numpy==1.26.4
 pandas==2.2.3
-albumentations
+albumentations==2.0.8   # what the upstream A4500 runs and the 2026-09-19 smoke used; see src/augment.py
 pyyaml
 scikit-learn
 wandb
