@@ -6,6 +6,7 @@
 #   bash own_run_ec2.sh smoke     # 3b: --limit 48 x1 plain, x1 --compile --fused_opt, + resume check
 #   bash own_run_ec2.sh ceiling   # 3c: gpu_ceiling.py plain vs --compile --fused_opt -> results/gpu_ceiling.csv
 #   bash own_run_ec2.sh wait      # 3d: --limit 500 --workers 16 pass; read the wait= readout
+#                                 # 3f: same command on the final config = pre-launch crash check
 #   bash own_run_ec2.sh train     # 4:  the control arm (escrow loop alongside); needs PREREG=1
 #   bash own_run_ec2.sh resume    # 5 of the runbook: same command + --resume after a spot death
 #
@@ -81,8 +82,12 @@ ceiling() {
 
 wait_probe() {
   cd "$FORK"
-  train_cmd --limit 500 --epochs 1 --workers 16 --wandb_project freuid-own-smoke --tag smoke_own_wait $EXTRA 2>&1 | tee logs/smoke_own_wait.log
-  grep -h "img/s wait=\|peak_mem=" logs/smoke_own_wait.log | tail -3
+  # date-stamped tag: a reused tag would resume into the earlier W&B run (id = <tag>_<vname>, resume=allow)
+  TAG=smoke_own_wait_$(date +%F)
+  train_cmd --limit 500 --epochs 1 --workers 16 --wandb_project freuid-own-smoke --tag $TAG $EXTRA 2>&1 | tee logs/$TAG.log
+  grep -h "img/s wait=\|peak_mem=" logs/$TAG.log | tail -3
+  grep -q "not valid for transform" logs/$TAG.log && echo "FAIL: albumentations ignored an argument (see tests/test_augment.py)"
+  grep -H "compile: true\|fused_opt: true\|eval_bs: 32" checkpoints/${TAG}_resolved.yaml
   echo "wait probe done -> DECIDE (plan step 3d): wait >= 15 % => sweep --workers before launch"
 }
 

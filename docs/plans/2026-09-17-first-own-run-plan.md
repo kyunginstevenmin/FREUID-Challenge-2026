@@ -176,11 +176,22 @@ minutes, not hours):
   training). `train.py` now prints `eval=<s>` on the epoch line and logs
   `eval/sec`; `eval_bs` goes 8 → 32 in the control config (eval-only,
   `no_grad`, plumbing — per-image outputs unchanged; gain read from `eval/sec`
-  on the run, not assumed). The 3b smoke must be re-run once with the final
-  config (compile/fused_opt in the YAML, intended augmentations, eval_bs 32)
-  before pre-registration.
+  on the run, not assumed).
 - Record the ceiling rows (`results/gpu_ceiling.csv`) and the verdict in
   PROFILING.md's results table — Kyungin writes the verdict rows.
+
+**Final-config smoke (added 2026-09-22, the last item before step 4).** One
+`bash own_run_ec2.sh wait` on the committed config — a crash check, not a
+measurement and not a score. Three things have changed since the 2026-09-19
+smoke and none has run on the box: the augmentation port (intended values
+under 2.x names — only CPU-tested on a random image, never inside 16 workers
+on real crops), `compile`/`fused_opt` read from the YAML instead of the CLI,
+and `eval_bs: 32` (an eval OOM would otherwise surface after ~85 min of
+training, at the end of epoch 0). ~10 min on the instance. Pass = the epoch
+line prints with `eval=`, no `not valid for transform` warnings in the log
+(the script greps for them), `wait=` still < 15 % under the real
+augmentations, and the resolved dump shows `compile: true`, `fused_opt: true`,
+`eval_bs: 32`. Then go straight to step 4 in the same session.
 
 ## Step 4 — first own run
 

@@ -31,6 +31,11 @@ added 2026-09-18; see [PROFILING.md](PROFILING.md) for rules and the knob table)
       Measured on the default augmentations; re-read from the control arm's epoch 1.)
 - [ ] 3e. Kyungin writes the cycle-zero verdict rows in PROFILING.md (ceiling
       side; the real side lands with 4).
+- [ ] 3f. Final-config smoke: `bash own_run_ec2.sh wait` once on the committed
+      config (crash check for the aug port / YAML speed flags / eval_bs 32 —
+      plan step 3, last paragraph). Pass: epoch line with `eval=`, no
+      "not valid for transform" warnings, wait < 15 %, resolved dump shows the
+      three settings. Same session → step 4.
 - [ ] 4. Pre-register in EVALUATION.md §6 (config path + SHAs, seed, epochs,
       selection rule), bump DRAFT → binding, launch under tmux + escrow. The
       run's `perf/*` readouts are the ViT-L cycle-zero row.
